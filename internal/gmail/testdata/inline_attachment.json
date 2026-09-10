@@ -1,0 +1,9 @@
+{"id":"m-inline","threadId":"t-5","labelIds":["INBOX"],"snippet":"Inline","internalDate":"1700000004000",
+ "payload":{"mimeType":"multipart/mixed","filename":"",
+  "headers":[{"name":"From","value":"ann@example.com"},{"name":"To","value":"control@example.com"},{"name":"Subject","value":"Inline attachment"}],
+  "body":{"size":0},
+  "parts":[
+   {"partId":"0","mimeType":"text/plain","filename":"","body":{"size":12,"data":"SW5saW5lIGJvZHkK"}},
+   {"partId":"1","mimeType":"text/plain","filename":"tiny.txt","headers":[{"name":"Content-Disposition","value":"attachment; filename=\"tiny.txt\""}],"body":{"size":12,"data":"aW5saW5lIGJ5dGVz"}},
+   {"partId":"2","mimeType":"application/octet-stream","filename":"broken.bin","body":{"size":3,"data":"***"}}
+  ]}}

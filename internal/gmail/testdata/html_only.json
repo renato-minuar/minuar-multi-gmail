@@ -1,0 +1,4 @@
+{"id":"m-html","threadId":"t-2","labelIds":["INBOX"],"snippet":"Hello bold","internalDate":"1700000001000",
+ "payload":{"mimeType":"text/html","filename":"",
+  "headers":[{"name":"From","value":"ann@example.com"},{"name":"To","value":"control@example.com"},{"name":"Subject","value":"HTML subject"}],
+  "body":{"size":150,"data":"PGh0bWw-PGhlYWQ-PHRpdGxlPlQ8L3RpdGxlPjxzdHlsZT5we2NvbG9yOnJlZH08L3N0eWxlPjwvaGVhZD48Ym9keT48cD5IZWxsbyA8Yj5ib2xkPC9iPjwvcD48YnI-TGluZSB0d28gJmFtcDsgbW9yZTxzY3JpcHQ-YWxlcnQoMSk8L3NjcmlwdD48L2JvZHk-PC9odG1sPg"}}}

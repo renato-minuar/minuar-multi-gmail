@@ -1,0 +1,4 @@
+{"id":"m-plain","threadId":"t-1","labelIds":["INBOX","UNREAD"],"snippet":"Hello from plain","internalDate":"1700000000000","sizeEstimate":4321,
+ "payload":{"mimeType":"text/plain","filename":"",
+  "headers":[{"name":"From","value":"Ann Example <ann@example.com>"},{"name":"To","value":"control@example.com, Bob <bob@example.com>"},{"name":"Cc","value":"carol@example.com"},{"name":"Reply-To","value":"list@example.com"},{"name":"Subject","value":"Plain subject"},{"name":"Message-ID","value":"<plain@mail.example.com>"}],
+  "body":{"size":23,"data":"SGVsbG8gZnJvbSBwbGFpbiB0ZXh0Lgo"}}}

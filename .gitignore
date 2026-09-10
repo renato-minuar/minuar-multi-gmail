@@ -1,0 +1,16 @@
+# build output
+/bin/
+/dist/
+
+# Google OAuth client download; never commit
+client_secret*.json
+
+# local
+.DS_Store
+*.log
+
+# subagent-driven-development scratch (ledger, briefs, review packages)
+.superpowers/
+
+# Claude Code local worktree directory
+/.claude/

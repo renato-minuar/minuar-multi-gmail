@@ -1,0 +1,8 @@
+{"id":"m-alt","threadId":"t-3","labelIds":["INBOX"],"snippet":"Alt","internalDate":"1700000002000",
+ "payload":{"mimeType":"multipart/alternative","filename":"",
+  "headers":[{"name":"From","value":"ann@example.com"},{"name":"To","value":"control@example.com"},{"name":"Subject","value":"Alt subject"}],
+  "body":{"size":0},
+  "parts":[
+   {"partId":"0","mimeType":"text/plain","filename":"","headers":[{"name":"Content-Type","value":"text/plain; charset=UTF-8"}],"body":{"size":15,"data":"QWx0IHBsYWluIGJvZHkK"}},
+   {"partId":"1","mimeType":"text/html","filename":"","headers":[{"name":"Content-Type","value":"text/html; charset=UTF-8"}],"body":{"size":20,"data":"PHA-QWx0IGh0bWwgYm9keTwvcD4"}}
+  ]}}

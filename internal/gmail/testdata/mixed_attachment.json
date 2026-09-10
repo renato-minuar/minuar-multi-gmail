@@ -1,0 +1,11 @@
+{"id":"m-mixed","threadId":"t-4","labelIds":["INBOX","IMPORTANT"],"snippet":"Mixed","internalDate":"1700000003000",
+ "payload":{"mimeType":"multipart/mixed","filename":"",
+  "headers":[{"name":"From","value":"ann@example.com"},{"name":"To","value":"control@example.com"},{"name":"Subject","value":"Mixed subject"}],
+  "body":{"size":0},
+  "parts":[
+   {"partId":"0","mimeType":"multipart/alternative","filename":"","body":{"size":0},"parts":[
+     {"partId":"0.0","mimeType":"text/plain","filename":"","body":{"size":17,"data":"TWl4ZWQgcGxhaW4gYm9keQo"}},
+     {"partId":"0.1","mimeType":"text/html","filename":"","body":{"size":20,"data":"PHA-QWx0IGh0bWwgYm9keTwvcD4"}}
+   ]},
+   {"partId":"1","mimeType":"application/pdf","filename":"invoice.pdf","headers":[{"name":"Content-Disposition","value":"attachment; filename=\"invoice.pdf\""}],"body":{"attachmentId":"ANGjdJ8attachment","size":12345}}
+  ]}}
