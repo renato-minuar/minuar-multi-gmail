@@ -1,106 +1,145 @@
 # minuar-multi-gmail
 
-One local MCP server that gives Claude Code read and write access to
-several Gmail accounts, one alias per account. You say "check my personal
-mail" and Claude picks the right mailbox itself. macOS only: secrets live
-in the Keychain.
+Give Claude Code your Gmail. Several accounts, one server, and Claude picks
+the right mailbox from the way you talk.
 
-## Requirements
+Once it is set up you can say things like:
 
-- macOS, Go 1.26.
-- Your own Google Cloud OAuth client of type Desktop app, with the Gmail
-  API enabled and the consent screen published. This project ships no
-  credentials and contacts no service other than Google: the client, the
-  tokens and the mail stay yours.
+- "What did the landlord write last week?" and Claude searches the mailbox
+  you described as the one for the house.
+- "Forward the three invoices from last month to my accountant." Claude finds
+  them, shows you the list, and sends after you say yes.
+- "Draft a reply to Ann saying Thursday works." A draft appears in Gmail;
+  nothing goes out until you ask.
+- "Archive everything from that newsletter" or "mark the thread read".
 
-## Install
+It runs on your Mac, talks only to Google, and keeps every secret in the
+macOS Keychain. Nothing is hosted anywhere and no credentials ship with the
+code.
+
+## How it keeps you safe
+
+- Claude cannot send mail quietly. The only tools that send are
+  `send_draft`, `forward_message` and `forward_messages`, and each one makes
+  Claude Code ask you for approval on every call, in every permission mode.
+  The prompt shows the recipient before anything leaves.
+- Replies and new mail are drafts first. You can read them in Gmail before
+  they go.
+- There is no permanent delete. Trash is reversible.
+- Tokens and the OAuth client live in the Keychain. The config file holds
+  only aliases, addresses and the sentences you wrote.
+
+## Quick start
+
+You need macOS, Go 1.26 and about fifteen minutes, most of it in the Google
+Cloud console.
+
+**1. Get an OAuth client from Google.** In the Google Cloud console create a
+project, enable the Gmail API, set up the consent screen (external, publish
+it, scope `gmail.modify`), and create an OAuth client of type **Desktop
+app**. Download its JSON file. The design spec under `docs/` walks through
+every click.
+
+**2. Build and register the server.**
 
     scripts/install.sh
     claude mcp add --scope user gmail -- ~/.local/bin/minuar-multi-gmail serve
 
-Rebuild with `scripts/install.sh` after code changes. Claude Code picks the
-new binary up at its next session start.
+**3. Store the client.**
 
-## Setup
+    minuar-multi-gmail setup ~/Downloads/client_secret_1234.json
 
-1. `minuar-multi-gmail setup ~/Downloads/client_secret_1234.json` stores
-   the OAuth client id and secret in the Keychain. Delete the downloaded
-   file afterwards.
-2. `minuar-multi-gmail add-account work` logs one Google account in through
-   the browser, then asks when Claude should use it. Answer with one
-   sentence, for example `the company mailbox; use it by default`. The
-   first account added becomes the default.
-3. Repeat step 2 per mailbox: `add-account personal`, `add-account shop`,
-   and so on. One alias, one Google account.
-4. `minuar-multi-gmail accounts` lists alias, address, the default mark and
-   the description:
+Then delete the downloaded file; the Keychain has it now.
 
-```
-work         you@company.example            (default)  the company mailbox; use it by default
-personal     you@gmail.com                             the personal mailbox; use it when they say personal or private
-```
+**4. Add your first account.**
 
-The description is the sentence Claude reads to choose an account, so write
-it the way you talk: `the personal mailbox; use it when they say personal,
-private or gmail`. Change it later with
+    minuar-multi-gmail add-account work
 
-    minuar-multi-gmail set-description personal "the personal mailbox; use it when they say personal or private"
+A browser window opens for the Google login. Back in the terminal the tool
+asks one question: when should Claude use this account? Answer in one plain
+sentence, the way you would tell a colleague:
 
-Run `set-description personal --clear` to remove it. The server renders the descriptions into its
-instructions and into every tool's `account` argument at startup, so start
-a new Claude Code session after changing one.
+    the company mailbox; use it by default
 
-## Commands
+That sentence is what Claude reads to choose between your accounts, so
+mention the words you actually use. The first account you add becomes the
+default.
+
+**5. Add the others.**
+
+    minuar-multi-gmail add-account personal
+    minuar-multi-gmail add-account house
+
+with descriptions such as `my personal gmail; use it when I say personal or
+private` or `the inbox for the two rental houses; use it when I mention the
+house, the lease or the landlord`.
+
+**6. Restart Claude Code** and ask it something about your mail.
+
+## Everyday commands
 
 | Command | What it does |
 |---------|--------------|
-| `minuar-multi-gmail setup <client_secret.json>` | Store the OAuth client id and secret in the Keychain. Delete the file afterwards. |
-| `minuar-multi-gmail add-account <alias> [--replace] [--description <text>]` | Log in one Google account in the browser and store its refresh token under the alias. Asks for the description unless `--description` gives it. First account becomes the default. |
-| `minuar-multi-gmail set-description <alias> <text>` | Change the sentence that tells Claude when to use the account. Use `--clear` instead of `<text>` to remove it. |
-| `minuar-multi-gmail accounts` | List aliases, addresses, the default and the descriptions. |
-| `minuar-multi-gmail set-default <alias>` | Change the default account. |
-| `minuar-multi-gmail remove-account <alias>` | Revoke the token at Google, delete it from the Keychain, forget the alias. |
-| `minuar-multi-gmail doctor` | Refresh every token and confirm each belongs to the stored address. |
-| `minuar-multi-gmail version` | Print the version. |
-| `minuar-multi-gmail serve` | MCP server over stdio. Logs to stderr only. |
+| `minuar-multi-gmail accounts` | Show every alias, its address, which one is the default, and its description. |
+| `minuar-multi-gmail set-description personal "…"` | Change the sentence for an account. `--clear` removes it. Restart Claude Code afterwards. |
+| `minuar-multi-gmail set-default personal` | Change the default account. |
+| `minuar-multi-gmail add-account work --replace` | Log an account in again, for example after Google asks for a fresh consent. Keeps the description. |
+| `minuar-multi-gmail remove-account shop` | Revoke the token at Google, delete it from the Keychain, forget the alias. |
+| `minuar-multi-gmail doctor` | Check the Keychain, the config and every token in one go. |
 
-Config lives in `~/.config/minuar-multi-gmail/accounts.json` (aliases,
-addresses and descriptions, never secrets). Keychain items sit under
-service `com.minuar.multi-gmail`.
+Less common: `setup <client_secret.json>` (step 3 above), `version`, and
+`serve`, which Claude Code runs for you.
 
-## Tools
+The config file is `~/.config/minuar-multi-gmail/accounts.json`. Keychain
+items sit under the service `com.minuar.multi-gmail`.
 
-`account` is optional on every tool and defaults to the configured default
-alias. Its description lists every alias, its address and when to use it,
-built from `accounts.json`. Every result names the alias and address it
-used.
+## What Claude can do with it
 
-| Tool | Purpose |
-|------|---------|
-| `accounts_list` | Aliases, addresses, default. |
-| `search_threads` | Gmail search syntax, compact rows, paging. |
-| `get_thread` / `get_message` | Plain-text bodies, attachment names, truncation flag. |
-| `list_labels` | System and user labels. |
-| `modify_labels` | Add or remove labels by name or id. Remove `UNREAD` to mark read, remove `INBOX` to archive. Never creates labels. |
-| `create_draft` | New message or reply (threading headers set). Nothing is sent. |
-| `forward_message` | Forward a message with its attachments. Sends by default and asks for approval on every call; `draft_only` keeps a draft. Inline by default; `as_eml` attaches the original as a `.eml` file when asked. Stays in the original conversation. |
-| `forward_messages` | Forward several messages to the same recipients in one call under one approval. Sends by default; `draft_only` keeps drafts. Reports per message what was sent or failed. |
-| `send_draft` | Sends an existing draft. Asks for approval on every call. |
-| `delete_draft` | Deletes a draft. |
-| `trash_thread` / `untrash_thread` | Reversible trash. |
+Every tool takes an optional `account` argument. Leave it out and the
+default account is used. Every answer names the alias and address it used,
+so you can always tell which mailbox Claude touched.
 
-There is no permanent delete.
+| Tool | What it does |
+|------|--------------|
+| `accounts_list` | Lists the aliases, addresses and the default. |
+| `search_threads` | Searches with the same syntax as the Gmail search box: `from:`, `newer_than:7d`, `has:attachment`, `label:`, and so on. |
+| `get_thread`, `get_message` | Read mail as plain text, with attachment names. |
+| `list_labels`, `modify_labels` | See and change labels. Removing `UNREAD` marks read, removing `INBOX` archives. Labels are never created. |
+| `create_draft` | Write a new mail or a reply as a draft. Never sends. |
+| `send_draft` | Send an existing draft. Asks you first. |
+| `forward_message` | Forward one message with its attachments. Sends after you approve; `draft_only` keeps a draft; `as_eml` attaches the original as a `.eml` file when you ask for that. |
+| `forward_messages` | Forward several messages to the same people in one call and one approval, with a per-message report. |
+| `delete_draft` | Delete a draft. |
+| `trash_thread`, `untrash_thread` | Move a conversation to the trash and back. |
 
-## Re-login
+## When something breaks
 
-When a tool answers `account "work" (…) needs re-login`, run:
+- **A tool says an account needs re-login.** Run `minuar-multi-gmail
+  add-account <alias> --replace`, then restart Claude Code. Google does
+  this when a token expires or when you revoke access.
+- **Claude picks the wrong mailbox.** Sharpen the description with
+  `set-description` and restart Claude Code. The sentence is all Claude has
+  to go on.
+- **Not sure what state things are in.** `minuar-multi-gmail doctor` reports
+  on every piece.
+- **The Google login shows "Access blocked".** Your OAuth consent screen is
+  not published, or a Workspace admin has to allow the app. Both are fixed
+  in the Google Cloud console, not here.
 
-    minuar-multi-gmail add-account work --replace
+## Why macOS only
 
-The stored description survives the re-login. Then start a new Claude Code
-session.
+Two things: secrets are stored through the macOS `security` command, and
+the login step opens the browser with `open`. Everything else is plain Go.
+A second secrets backend behind the existing `Store` interface would make
+it run on Linux.
 
-## Verify
+## For developers
 
-    scripts/verify.sh                                   # gofmt, vet, build, tests
-    MINUAR_MULTI_GMAIL_KEYCHAIN_TEST=1 go test ./internal/secrets/ -run Integration -v   # real Keychain, throwaway item
+    scripts/verify.sh                                   # gofmt, vet, build, tests with the race detector
+    MINUAR_MULTI_GMAIL_KEYCHAIN_TEST=1 go test ./internal/secrets/ -run Integration -v   # touches the real Keychain with a throwaway item
+
+The design specs live in `docs/superpowers/specs/`. Rebuild with
+`scripts/install.sh` after changes; Claude Code picks the new binary up at
+its next session start.
+
+MIT licensed.
