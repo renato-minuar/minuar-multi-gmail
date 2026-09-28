@@ -478,7 +478,7 @@ func TestServeDepsWiring(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(&errBuf, nil))
 
 	d := serveDeps(p, logger)
-	if d.Config == nil || d.Service == nil || d.Logger == nil || d.Now == nil {
+	if d.Config == nil || d.Service == nil || d.Logger == nil || d.Now == nil || d.AttachmentDir == "" {
 		t.Fatalf("deps = %+v", d)
 	}
 	if d.Logger != logger {
@@ -491,6 +491,24 @@ func TestServeDepsWiring(t *testing.T) {
 	server := buildServer(p, logger, &errBuf)
 	if server == nil {
 		t.Fatal("buildServer returned nil")
+	}
+}
+
+func TestAttachmentDir(t *testing.T) {
+	t.Setenv(envAttachmentDir, "")
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := attachmentDir()
+	if err != nil || got != filepath.Join(cache, "minuar-multi-gmail", "attachments") {
+		t.Fatalf("default dir = %q err %v", got, err)
+	}
+
+	t.Setenv(envAttachmentDir, "/tmp/elsewhere")
+	got, err = attachmentDir()
+	if err != nil || got != "/tmp/elsewhere" {
+		t.Fatalf("dir from the environment = %q err %v", got, err)
 	}
 }
 
@@ -510,6 +528,7 @@ func TestServerInstructions(t *testing.T) {
 		"Pick the account from the user's wording and never ask which one.",
 		"Mail is sent by send_draft, forward_message and forward_messages; create_draft never sends.",
 		"Use forward_messages when more than one message is to be forwarded: one call, one approval.",
+		"To read an attachment, call get_attachment and open the file at the returned path.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("instructions lack %q: %q", want, got)

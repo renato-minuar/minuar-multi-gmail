@@ -51,7 +51,7 @@ func TestServeOverStdio(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.Command(bin, "serve")
-	cmd.Env = append(os.Environ(), config.EnvDir+"="+cfgDir, secrets.EnvService+"=com.minuar.multi-gmail.test")
+	cmd.Env = append(os.Environ(), config.EnvDir+"="+cfgDir, envAttachmentDir+"="+t.TempDir(), secrets.EnvService+"=com.minuar.multi-gmail.test")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -67,7 +67,7 @@ func TestServeOverStdio(t *testing.T) {
 		t.Fatal("no initialize result")
 	}
 	for _, want := range []string{
-		"forward_message",
+		"forward_message", "get_attachment",
 		"control@example.com", "p@gmail.com",
 		"the company mailbox; use it by default", "the personal mailbox; use it when they say personal",
 	} {
@@ -110,6 +110,15 @@ func TestServeOverStdio(t *testing.T) {
 			}
 			if !strings.Contains(string(schema), "draft_only") {
 				t.Fatalf("forward_message schema lacks draft_only: %s", schema)
+			}
+		}
+		if tool.Name == "get_attachment" {
+			schema, _ := json.Marshal(tool.InputSchema)
+			if !strings.Contains(string(schema), wantAccount) {
+				t.Fatalf("get_attachment schema lacks the account description: %s", schema)
+			}
+			if !strings.Contains(string(schema), `"required":["message_id"]`) {
+				t.Fatalf("get_attachment must require only message_id: %s", schema)
 			}
 		}
 		if tool.Name == "forward_messages" {
@@ -180,6 +189,16 @@ func TestServeOverStdio(t *testing.T) {
 	}
 	if !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "message_id is required") {
 		t.Fatalf("forward_message with blank message_id: %+v", res.Content)
+	}
+
+	// A message id that reads as a path is refused before any account or
+	// file is touched.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "get_attachment", Arguments: map[string]any{"message_id": "../x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "message_id may hold only") {
+		t.Fatalf("get_attachment with a path as message_id: %+v", res.Content)
 	}
 
 	// An empty messages list passes the schema (the field is present) and

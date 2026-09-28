@@ -88,7 +88,7 @@ func withAccountDescription[T any](desc string, log *slog.Logger) any {
 }
 
 var ToolNames = []string{
-	"accounts_list", "search_threads", "get_thread", "get_message", "list_labels", "modify_labels",
+	"accounts_list", "search_threads", "get_thread", "get_message", "get_attachment", "list_labels", "modify_labels",
 	"create_draft", "forward_message", "forward_messages", "send_draft", "delete_draft", "trash_thread", "untrash_thread",
 }
 
@@ -104,6 +104,9 @@ type Deps struct {
 	Service func(ctx context.Context, alias string) (gmail.Service, error)
 	Logger  *slog.Logger
 	Now     func() time.Time
+	// AttachmentDir is where get_attachment writes files, one directory per
+	// account and message. Empty disables the tool's writes.
+	AttachmentDir string
 }
 
 type handlers struct{ d Deps }
@@ -165,7 +168,7 @@ func formatDate(t time.Time) string {
 
 func boolPtr(b bool) *bool { return &b }
 
-// Register adds the 13 tools to the server. The account property of every
+// Register adds the 14 tools to the server. The account property of every
 // tool that has one describes the configured accounts, read once here.
 func Register(s *mcp.Server, d Deps) {
 	h := &handlers{d: d}
@@ -181,8 +184,9 @@ func Register(s *mcp.Server, d Deps) {
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true}
 	mcp.AddTool(s, &mcp.Tool{Name: "accounts_list", Description: "List the connected Gmail accounts and which alias is the default.", Annotations: readOnly}, h.accountsList)
 	mcp.AddTool(s, &mcp.Tool{Name: "search_threads", Description: "Search mail threads with Gmail query syntax. Returns compact rows; use get_thread for bodies.", Annotations: readOnly, InputSchema: withAccountDescription[SearchThreadsInput](account, h.log())}, h.searchThreads)
-	mcp.AddTool(s, &mcp.Tool{Name: "get_thread", Description: "Read every message in a thread as plain text, with attachment names. Does not mark the thread read.", Annotations: readOnly, InputSchema: withAccountDescription[GetThreadInput](account, h.log())}, h.getThread)
+	mcp.AddTool(s, &mcp.Tool{Name: "get_thread", Description: "Read every message in a thread as plain text, with attachment names; get_attachment opens an attachment. Does not mark the thread read.", Annotations: readOnly, InputSchema: withAccountDescription[GetThreadInput](account, h.log())}, h.getThread)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_message", Description: "Read one message as plain text.", Annotations: readOnly, InputSchema: withAccountDescription[GetMessageInput](account, h.log())}, h.getMessage)
+	mcp.AddTool(s, &mcp.Tool{Name: "get_attachment", Description: "Save the attachments of a message to local files and return their paths, so the files can be opened and read. Saves one attachment when filename is given, every attachment otherwise. Allowed types: " + allowedTypesText() + ". Other types are skipped and reported. Does not mark the message read.", Annotations: readOnly, InputSchema: withAccountDescription[GetAttachmentInput](account, h.log())}, h.getAttachment)
 	mcp.AddTool(s, &mcp.Tool{Name: "list_labels", Description: "List the account's labels (system and user).", Annotations: readOnly, InputSchema: withAccountDescription[ListLabelsInput](account, h.log())}, h.listLabels)
 	mcp.AddTool(s, &mcp.Tool{Name: "modify_labels", Description: "Add or remove labels on a thread. remove_labels [\"UNREAD\"] marks it read; remove_labels [\"INBOX\"] archives it. Labels are never created.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true}, InputSchema: withAccountDescription[ModifyLabelsInput](account, h.log())}, h.modifyLabels)
 	mcp.AddTool(s, &mcp.Tool{Name: "create_draft", Description: "Create a draft, new or as a reply. Nothing is sent. From is always the account's own address.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)}, InputSchema: withAccountDescription[CreateDraftInput](account, h.log())}, h.createDraft)

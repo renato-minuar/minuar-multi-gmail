@@ -254,7 +254,7 @@ func TestAccountDescriptionOnEveryInput(t *testing.T) {
 	// be read, so the two must stay identical.
 	inputs := []any{SearchThreadsInput{}, GetThreadInput{}, GetMessageInput{}, ListLabelsInput{}, ModifyLabelsInput{},
 		CreateDraftInput{}, SendDraftInput{}, DeleteDraftInput{}, TrashThreadInput{}, UntrashThreadInput{}, ForwardMessageInput{},
-		ForwardMessagesInput{}}
+		ForwardMessagesInput{}, GetAttachmentInput{}}
 	for _, in := range inputs {
 		f, ok := reflect.TypeOf(in).FieldByName("Account")
 		if !ok {
@@ -264,7 +264,7 @@ func TestAccountDescriptionOnEveryInput(t *testing.T) {
 			t.Fatalf("%T Account tag = %q", in, f.Tag)
 		}
 	}
-	if len(ToolNames) != 13 {
+	if len(ToolNames) != 14 {
 		t.Fatalf("ToolNames = %d", len(ToolNames))
 	}
 }

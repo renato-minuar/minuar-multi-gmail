@@ -23,6 +23,12 @@ type GetMessageInput struct {
 	MaxBodyChars int    `json:"max_body_chars,omitempty" jsonschema:"Body characters, 1-100000. Default 5000"`
 }
 
+type GetAttachmentInput struct {
+	Account   string `json:"account,omitempty" jsonschema:"Account alias. Omit for the default account. The server instructions list every alias, its address and when to use it. Never ask the user which one."`
+	MessageID string `json:"message_id" jsonschema:"Message id from get_thread or get_message"`
+	Filename  string `json:"filename,omitempty" jsonschema:"Attachment filename as get_thread or get_message lists it. Omit to save every attachment of the message"`
+}
+
 type ListLabelsInput struct {
 	Account string `json:"account,omitempty" jsonschema:"Account alias. Omit for the default account. The server instructions list every alias, its address and when to use it. Never ask the user which one."`
 }
@@ -159,6 +165,28 @@ type GetMessageOutput struct {
 	Account string     `json:"account"`
 	Email   string     `json:"email"`
 	Message MessageOut `json:"message"`
+}
+
+// SavedAttachment is one file get_attachment wrote. Filename is the name in
+// the mail; Path is where the file is, under a name made safe for disk.
+type SavedAttachment struct {
+	Filename  string `json:"filename"`
+	Path      string `json:"path"`
+	MimeType  string `json:"mime_type,omitempty"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
+type SkippedAttachment struct {
+	Filename string `json:"filename"`
+	Reason   string `json:"reason"`
+}
+
+type GetAttachmentOutput struct {
+	Account   string              `json:"account"`
+	Email     string              `json:"email"`
+	MessageID string              `json:"message_id"`
+	Files     []SavedAttachment   `json:"files"`
+	Skipped   []SkippedAttachment `json:"skipped"`
 }
 
 type LabelOut struct {

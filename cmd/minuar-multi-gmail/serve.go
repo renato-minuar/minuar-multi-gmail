@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -23,7 +24,25 @@ const instructionsTail = "Pick the account from the user's wording and never ask
 	"Mail is sent by send_draft, forward_message and forward_messages; create_draft never sends. " +
 	"forward_message sends the forward right away and asks the user for approval on every call; set draft_only when the user wants a draft to review. " +
 	"It quotes the original inline with its attachments; set as_eml only when the user asks for eml or to forward as attachment. " +
-	"Use forward_messages when more than one message is to be forwarded: one call, one approval."
+	"Use forward_messages when more than one message is to be forwarded: one call, one approval. " +
+	"To read an attachment, call get_attachment and open the file at the returned path."
+
+// envAttachmentDir overrides where get_attachment writes files.
+const envAttachmentDir = "MINUAR_MULTI_GMAIL_ATTACHMENT_DIR"
+
+// attachmentDir returns the directory get_attachment writes to:
+// $MINUAR_MULTI_GMAIL_ATTACHMENT_DIR when set, otherwise
+// minuar-multi-gmail/attachments under the user's cache directory.
+func attachmentDir() (string, error) {
+	if d := os.Getenv(envAttachmentDir); d != "" {
+		return d, nil
+	}
+	cache, err := os.UserCacheDir()
+	if err != nil {
+		return "", fmt.Errorf("attachment dir: %w", err)
+	}
+	return filepath.Join(cache, "minuar-multi-gmail", "attachments"), nil
+}
 
 // serverInstructions renders the instructions Claude Code reads once, at
 // connect time: which accounts exist, when to use each, how mail is sent.
@@ -48,9 +67,15 @@ func serverInstructions(cfg *config.File) string {
 // serveDeps installs logger as the process-wide slog default, so every
 // slog caller in the process (tools, the go-sdk, any library) writes
 // through the same stderr handler, then returns the Deps the tools use.
+// Without an attachment directory the server still starts: get_attachment
+// then reports the missing directory on its own calls.
 func serveDeps(p *provider, logger *slog.Logger) tools.Deps {
 	slog.SetDefault(logger)
-	return tools.Deps{Config: p.loadConfig, Service: p.service, Logger: logger, Now: time.Now}
+	dir, err := attachmentDir()
+	if err != nil {
+		logger.Warn("get_attachment cannot save files", "err", err)
+	}
+	return tools.Deps{Config: p.loadConfig, Service: p.service, Logger: logger, Now: time.Now, AttachmentDir: dir}
 }
 
 // buildServer wires the MCP server and its tools for one provider. The

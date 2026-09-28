@@ -26,6 +26,9 @@ code.
 - Replies and new mail are drafts first. You can read them in Gmail before
   they go.
 - There is no permanent delete. Trash is reversible.
+- Attachments are saved only for a fixed list of file types, under
+  `~/Library/Caches/minuar-multi-gmail/attachments`, in a directory only
+  you can read. The name a sender gave a file cannot move it anywhere else.
 - Tokens and the OAuth client live in the Keychain. The config file holds
   only aliases, addresses and the sentences you wrote.
 
@@ -104,6 +107,7 @@ so you can always tell which mailbox Claude touched.
 | `accounts_list` | Lists the aliases, addresses and the default. |
 | `search_threads` | Searches with the same syntax as the Gmail search box: `from:`, `newer_than:7d`, `has:attachment`, `label:`, and so on. |
 | `get_thread`, `get_message` | Read mail as plain text, with attachment names. |
+| `get_attachment` | Saves the attachments of a message to files on your Mac so Claude can open them. Only file types Claude can read are saved: PDF, images, text, and Word, Excel and PowerPoint files. |
 | `list_labels`, `modify_labels` | See and change labels. Removing `UNREAD` marks read, removing `INBOX` archives. Labels are never created. |
 | `create_draft` | Write a new mail or a reply as a draft. Never sends. |
 | `send_draft` | Send an existing draft. Asks you first. |
