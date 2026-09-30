@@ -44,39 +44,14 @@ func newestClientFile(dir string, since time.Time) string {
 	return best
 }
 
-// handBack puts a line the watcher read but did not use back at the front
-// of the input, so the next prompt reads it. It replaces d.lineCh with a
-// channel that delivers held first and then everything the old one sends.
-func handBack(d *wizardDeps, held []lineResult) {
-	if len(held) == 0 {
-		return
-	}
-	old := d.lines()
-	ch := make(chan lineResult)
-	d.lineCh = ch
-	go func() {
-		for _, r := range held {
-			ch <- r
-		}
-		for r := range old {
-			ch <- r
-		}
-		close(ch)
-	}()
-}
-
 // watchDownloads waits for the client file: a new client_secret*.json in
 // the Downloads directory, or the path of an existing file pasted on stdin.
-// An empty line on stdin re-prints the hint and keeps waiting. Any other
-// line is an answer typed ahead for a later prompt: the watcher stops
-// reading stdin and hands the line back when it returns. A closed stdin
-// ends the pasted-path route only; the watcher goes on until the file
-// appears or the wait runs out.
+// An empty line re-prints the hint. A line that is not an existing file is
+// reported and discarded. A closed stdin ends the pasted-path route only;
+// the watcher goes on until the file appears or the wait runs out.
 func watchDownloads(d *wizardDeps, since time.Time) (string, error) {
 	deadline := d.now().Add(d.waitFile)
 	input := d.lines()
-	var held []lineResult
-	defer func() { handBack(d, held) }()
 	for {
 		if p := newestClientFile(d.downloads, since); p != "" {
 			return p, nil
@@ -94,8 +69,7 @@ func watchDownloads(d *wizardDeps, since time.Time) (string, error) {
 			case isRegularFile(line):
 				return line, nil
 			default:
-				held = append(held, r)
-				input = nil // stop reading so the held line stays in order
+				fmt.Fprintf(d.out, "not a file: %s; still waiting for the file in %s\n", line, d.downloads)
 			}
 		default:
 		}

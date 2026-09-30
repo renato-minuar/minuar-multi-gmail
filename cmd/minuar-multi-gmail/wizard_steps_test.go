@@ -277,14 +277,18 @@ func TestWizardClientSkipsWhenStored(t *testing.T) {
 func TestWizardClientGuidesTheConsoleAndStoresTheDownload(t *testing.T) {
 	// Enter for pages 1-3, then the file appears while page 4 is open, then
 	// "y" to delete the download.
-	s := newStepDeps(t, "\n\n\n"+"y\n", "darwin", secrets.KindKeychain, "")
+	s := newStepDeps(t, "", "darwin", secrets.KindKeychain, "")
+	w := pipeInput(t, s.d, "\n\n\n")
 	start := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	now, sleep, after := fakeClock(start)
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
 	var opened []string
 	s.d.openURL = func(u string) error { opened = append(opened, u); return nil }
 	var path string
-	after(2*time.Second, func() { path = writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
+	after(2*time.Second, func() {
+		path = writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second))
+		w.WriteString("y\n")
+	})
 	st := secrets.NewMem()
 	if err := wizardClient(context.Background(), s.d, secrets.KindKeychain, st); err != nil {
 		t.Fatal(err)
@@ -310,12 +314,16 @@ func TestWizardClientGuidesTheConsoleAndStoresTheDownload(t *testing.T) {
 }
 
 func TestWizardClientKeepsTheDownloadOnNo(t *testing.T) {
-	s := newStepDeps(t, "\n\n\n"+"n\n", "darwin", secrets.KindKeychain, "")
+	s := newStepDeps(t, "", "darwin", secrets.KindKeychain, "")
+	w := pipeInput(t, s.d, "\n\n\n")
 	start := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	now, sleep, after := fakeClock(start)
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
 	var path string
-	after(2*time.Second, func() { path = writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
+	after(2*time.Second, func() {
+		path = writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second))
+		w.WriteString("n\n")
+	})
 	if err := wizardClient(context.Background(), s.d, secrets.KindKeychain, secrets.NewMem()); err != nil {
 		t.Fatal(err)
 	}
@@ -345,5 +353,34 @@ func TestWizardClientRejectsABadFile(t *testing.T) {
 	err := wizardClient(context.Background(), s.d, secrets.KindKeychain, secrets.NewMem())
 	if err == nil || !strings.Contains(err.Error(), "client_secret_bad.json") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// pipeInput feeds stdin through a pipe so a test can type answers at the
+// moment a real user would. It writes first and returns the writer.
+func pipeInput(t *testing.T, d *wizardDeps, first string) *os.File {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { w.Close(); r.Close() })
+	d.in = r
+	w.WriteString(first)
+	return w
+}
+
+func TestWatchDownloadsIgnoresALineThatIsNotAFile(t *testing.T) {
+	s := newStepDeps(t, "not-a-path\n", "darwin", secrets.KindKeychain, "")
+	start := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	now, sleep, after := fakeClock(start)
+	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
+	after(2*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
+	got, err := watchDownloads(s.d, start)
+	if err != nil || filepath.Base(got) != "client_secret_new.json" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if !strings.Contains(s.out.String(), "not a file: not-a-path") {
+		t.Fatalf("out = %q", s.out.String())
 	}
 }
