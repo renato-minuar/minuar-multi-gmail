@@ -188,10 +188,32 @@ func productionWizardDeps(io stdio) (*wizardDeps, error) {
 	return d, nil
 }
 
-// runWizard runs the steps in order. Task 6 adds the steps; until then it
-// prints the heading and returns.
+// runWizard runs the six steps in order and stops at the first error.
 func runWizard(ctx context.Context, d *wizardDeps) error {
 	heading(d, "Setup wizard")
+	fmt.Fprintln(d.out, "Enter accepts the value in brackets. Every step skips what is already done.")
+	kind, accepted, err := wizardStore(d)
+	if err != nil {
+		return err
+	}
+	if !accepted {
+		return errStoreRefused
+	}
+	store, err := d.open(kind)
+	if err != nil {
+		return err
+	}
+	wizardClaude(d)
+	if err := wizardClient(ctx, d, kind, store); err != nil {
+		return err
+	}
+	if err := wizardAccounts(ctx, d, store); err != nil {
+		return err
+	}
+	if err := wizardDefault(d); err != nil {
+		return err
+	}
+	wizardCheck(ctx, d, store, kind)
 	return nil
 }
 
