@@ -258,7 +258,7 @@ func TestWatchDownloadsFindsANewFile(t *testing.T) {
 	// An old download from an earlier attempt must be ignored.
 	writeClientFile(t, s.d.downloads, "client_secret_old.json", start.Add(-time.Hour))
 	after(3*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
-	got, err := watchDownloads(s.d, start)
+	got, _, err := watchDownloads(s.d, start)
 	if err != nil || filepath.Base(got) != "client_secret_new.json" {
 		t.Fatalf("got %q, %v", got, err)
 	}
@@ -269,7 +269,7 @@ func TestWatchDownloadsTimesOut(t *testing.T) {
 	start := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	now, sleep, _ := fakeClock(start)
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, 5*time.Second
-	_, err := watchDownloads(s.d, start)
+	_, _, err := watchDownloads(s.d, start)
 	if err == nil || !strings.Contains(err.Error(), "no client file appeared in "+s.d.downloads+" within 5s") {
 		t.Fatalf("err = %v", err)
 	}
@@ -282,7 +282,7 @@ func TestWatchDownloadsAcceptsAPastedPath(t *testing.T) {
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
 	elsewhere := writeClientFile(t, t.TempDir(), "client_secret_x.json", start.Add(-time.Hour))
 	s.d.in = strings.NewReader(elsewhere + "\n")
-	got, err := watchDownloads(s.d, start)
+	got, _, err := watchDownloads(s.d, start)
 	if err != nil || got != elsewhere {
 		t.Fatalf("got %q, %v", got, err)
 	}
@@ -295,7 +295,7 @@ func TestWatchDownloadsEmptyLineKeepsWaiting(t *testing.T) {
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
 	s.d.in = strings.NewReader("\n")
 	after(30*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
-	got, err := watchDownloads(s.d, start)
+	got, _, err := watchDownloads(s.d, start)
 	if err != nil || filepath.Base(got) != "client_secret_new.json" {
 		t.Fatalf("got %q, %v", got, err)
 	}
@@ -419,11 +419,148 @@ func TestWatchDownloadsIgnoresALineThatIsNotAFile(t *testing.T) {
 	now, sleep, after := fakeClock(start)
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
 	after(30*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
-	got, err := watchDownloads(s.d, start)
+	got, _, err := watchDownloads(s.d, start)
 	if err != nil || filepath.Base(got) != "client_secret_new.json" {
 		t.Fatalf("got %q, %v", got, err)
 	}
 	if !strings.Contains(s.out.String(), "not a file: not-a-path") {
 		t.Fatalf("out = %q", s.out.String())
+	}
+}
+
+func TestNewestClientFileSkipsEmptyFiles(t *testing.T) {
+	dir := t.TempDir()
+	start := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
+	empty := filepath.Join(dir, "client_secret_empty.json")
+	if err := os.WriteFile(empty, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	os.Chtimes(empty, start.Add(time.Minute), start.Add(time.Minute))
+	if got := newestClientFile(dir, start); got != "" {
+		t.Fatalf("an empty file must be ignored, got %q", got)
+	}
+	full := writeClientFile(t, dir, "client_secret_full.json", start.Add(time.Second))
+	if got := newestClientFile(dir, start); got != full {
+		t.Fatalf("got %q, want %q", got, full)
+	}
+}
+
+func TestNormalizePath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	spaced := filepath.Join(dir, "my files")
+	os.MkdirAll(spaced, 0o755)
+	plain := writeClientFile(t, dir, "client_secret_q.json", time.Now())
+	withSpace := writeClientFile(t, spaced, "client_secret_s.json", time.Now())
+	underHome := writeClientFile(t, home, "client_secret_h.json", time.Now())
+	cases := []struct{ in, want string }{
+		{"  '" + plain + "'  ", plain},
+		{`"` + plain + `"`, plain},
+		{strings.ReplaceAll(withSpace, " ", `\ `), withSpace},
+		{"~/client_secret_h.json", underHome},
+	}
+	for _, c := range cases {
+		got := normalizePath(c.in)
+		if got != c.want || !isRegularFile(got) {
+			t.Fatalf("normalizePath(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestWizardClientOffersALeftoverFile(t *testing.T) {
+	s := newStepDeps(t, "y\nn\n", "darwin", secrets.KindKeychain, "")
+	left := writeClientFile(t, s.d.downloads, "client_secret_left.json", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	opened := 0
+	s.d.openURL = func(string) error { opened++; return nil }
+	st := secrets.NewMem()
+	if err := wizardClient(context.Background(), s.d, secrets.KindKeychain, st); err != nil {
+		t.Fatal(err)
+	}
+	if id, _ := st.Get(secrets.ClientIDKey); id == "" || opened != 0 {
+		t.Fatalf("client id %q opened %d", id, opened)
+	}
+	out := s.out.String()
+	if !strings.Contains(out, "Use "+left+"? [Y/n]") || !strings.Contains(out, "Delete "+left+"? [y/N]") {
+		t.Fatalf("out = %q", out)
+	}
+	if _, err := os.Stat(left); err != nil {
+		t.Fatalf("the default for a reused file is to keep it: %v", err)
+	}
+}
+
+func TestWizardClientDeclinedLeftoverOpensThePages(t *testing.T) {
+	s := newStepDeps(t, "n\n\n\n\n", "darwin", secrets.KindKeychain, "")
+	writeClientFile(t, s.d.downloads, "client_secret_left.json", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC))
+	now, sleep, _ := fakeClock(time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC))
+	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Second
+	opened := 0
+	s.d.openURL = func(string) error { opened++; return nil }
+	err := wizardClient(context.Background(), s.d, secrets.KindKeychain, secrets.NewMem())
+	if err == nil || !strings.Contains(err.Error(), "no client file appeared") || opened != 4 {
+		t.Fatalf("opened %d err %v", opened, err)
+	}
+}
+
+func TestWizardClientPathPastedAtPageTwoStoresIt(t *testing.T) {
+	elsewhere := writeClientFile(t, t.TempDir(), "client_secret_x.json", time.Now())
+	s := newStepDeps(t, "\n"+"'"+elsewhere+"'\n"+"y\n", "darwin", secrets.KindKeychain, "")
+	var opened []string
+	s.d.openURL = func(u string) error { opened = append(opened, u); return nil }
+	st := secrets.NewMem()
+	if err := wizardClient(context.Background(), s.d, secrets.KindKeychain, st); err != nil {
+		t.Fatal(err)
+	}
+	if len(opened) != 2 {
+		t.Fatalf("pages opened = %v, want 2", opened)
+	}
+	if id, _ := st.Get(secrets.ClientIDKey); id == "" {
+		t.Fatal("client not stored")
+	}
+	if !strings.Contains(s.out.String(), "Delete "+elsewhere+"? [y/N]") {
+		t.Fatalf("out = %q", s.out.String())
+	}
+}
+
+func TestWizardClientOtherTextAtAPageAsksAgain(t *testing.T) {
+	s := newStepDeps(t, "done\n\n\n\n", "darwin", secrets.KindKeychain, "")
+	now, sleep, _ := fakeClock(time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC))
+	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Second
+	wizardClient(context.Background(), s.d, secrets.KindKeychain, secrets.NewMem())
+	if !strings.Contains(s.out.String(), "press Enter when the page is done, or paste the path of the downloaded file") {
+		t.Fatalf("out = %q", s.out.String())
+	}
+}
+
+func TestWizardClientSkipRecordsTheKind(t *testing.T) {
+	s := newStepDeps(t, "", "darwin", secrets.KindKeychain, "")
+	if err := wizardClient(context.Background(), s.d, secrets.KindKeychain, seededStore(t)); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := config.Load(s.d.configDir)
+	if cfg.Secrets != "keychain" || !strings.Contains(s.out.String(), "Recorded the secret store.") {
+		t.Fatalf("config %+v out %q", cfg, s.out.String())
+	}
+}
+
+func TestWizardClientNoDisplayHint(t *testing.T) {
+	const hint = "This machine has no display: download the file on your own computer, copy it here (scp), and paste its path."
+	for _, c := range []struct {
+		goos string
+		env  map[string]string
+		want bool
+	}{
+		{"linux", nil, true},
+		{"darwin", nil, false},
+		{"linux", map[string]string{"DISPLAY": ":0"}, false},
+	} {
+		s := newStepDeps(t, "\n\n\n", c.goos, secrets.KindFile, "")
+		s.d.getenv = func(k string) string { return c.env[k] }
+		now, sleep, _ := fakeClock(time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC))
+		s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Second
+		wizardClient(context.Background(), s.d, secrets.KindFile, secrets.NewMem())
+		if got := strings.Contains(s.out.String(), hint); got != c.want {
+			t.Fatalf("goos %s env %v: hint shown %v, want %v", c.goos, c.env, got, c.want)
+		}
 	}
 }

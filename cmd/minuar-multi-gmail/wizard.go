@@ -49,6 +49,8 @@ type wizardDeps struct {
 	profile       func(ctx context.Context, tok *oauth2.Token) (string, error)
 	doctorProfile func(ctx context.Context, ts oauth2.TokenSource) (string, error)
 
+	getenv func(string) string // nil reads as all empty
+
 	now      func() time.Time
 	sleep    func(time.Duration)
 	waitFile time.Duration // how long w3 watches the Downloads directory
@@ -181,6 +183,7 @@ func productionWizardDeps(io stdio) (*wizardDeps, error) {
 			return gmail.ProfileEmail(ctx, option.WithTokenSource(ts))
 		},
 		now: time.Now, sleep: time.Sleep, waitFile: 10 * time.Minute,
+		getenv: os.Getenv,
 	}
 	d.login = func(ctx context.Context, creds googleauth.ClientCreds) (*oauth2.Token, error) {
 		return googleauth.Login(ctx, googleauth.LoginOptions{Creds: creds, OpenURL: openBrowser, Notify: d.out})
