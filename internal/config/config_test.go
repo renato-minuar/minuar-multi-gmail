@@ -39,9 +39,6 @@ func TestLoadMissingFileGivesEmpty(t *testing.T) {
 }
 
 func TestSaveLoadRoundTripAndPermissions(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("file modes are Unix only")
-	}
 	dir := filepath.Join(t.TempDir(), "cfg")
 	f := &File{Version: 1}
 	if err := f.Add(acct("work", "control@example.com")); err != nil {
@@ -53,19 +50,21 @@ func TestSaveLoadRoundTripAndPermissions(t *testing.T) {
 	if err := Save(dir, f); err != nil {
 		t.Fatal(err)
 	}
-	st, err := os.Stat(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.Mode().Perm() != 0o700 {
-		t.Fatalf("dir mode = %o, want 700", st.Mode().Perm())
-	}
-	st, err = os.Stat(filepath.Join(dir, FileName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if st.Mode().Perm() != 0o600 {
-		t.Fatalf("file mode = %o, want 600", st.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		st, err := os.Stat(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != 0o700 {
+			t.Fatalf("dir mode = %o, want 700", st.Mode().Perm())
+		}
+		st, err = os.Stat(filepath.Join(dir, FileName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Mode().Perm() != 0o600 {
+			t.Fatalf("file mode = %o, want 600", st.Mode().Perm())
+		}
 	}
 	entries, _ := os.ReadDir(dir)
 	if len(entries) != 1 {
