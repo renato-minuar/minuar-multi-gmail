@@ -43,58 +43,48 @@ credentials ship with the code.
 
 ## Quick start
 
-You need macOS or Linux, Go 1.26 and about fifteen minutes, most of it in the
+You need macOS or Linux, Go 1.26 and about ten minutes, most of them in the
 Google Cloud console.
 
-**1. Get an OAuth client from Google.** In the Google Cloud console create a
-project, enable the Gmail API, set up the consent screen (external, publish
-it, scope `gmail.modify`), and create an OAuth client of type **Desktop
-app**. Download its JSON file. The design spec under `docs/` walks through
-every click.
-
-**2. Build and register the server.**
-
+    git clone https://github.com/renato-minuar/minuar-multi-gmail.git
+    cd minuar-multi-gmail
     scripts/install.sh
-    claude mcp add --scope user gmail -- ~/.local/bin/minuar-multi-gmail serve
 
-**3. Store the client.**
+The script builds the binary into `~/.local/bin` and starts the wizard. The
+wizard registers the server in Claude Code, opens the four Google console
+pages you need one at a time (create a project, enable the Gmail API,
+publish the consent screen, create a Desktop app client and download its
+JSON), picks the downloaded file up from `~/Downloads` by itself, then logs
+your accounts in and proposes an alias and a sentence for each one. Enter
+accepts a proposal. On a Linux machine without a keyring it asks once
+whether tokens may go to a private file.
 
-    minuar-multi-gmail setup ~/Downloads/client_secret_1234.json
+When it ends, restart Claude Code and ask it something about your mail. Run
+`minuar-multi-gmail wizard` again at any time: every step skips what is
+already done, so it is also the way to add an account later.
 
-Then delete the downloaded file; the secret store has it now. `setup` prints
-which store it chose and why. On a Linux machine without a keyring, `setup`
-stops and asks you to accept the file store with
-`MINUAR_MULTI_GMAIL_SECRETS=file`.
+### By hand
 
-**4. Add your first account.**
+The same steps as commands, for people who prefer them:
 
-    minuar-multi-gmail add-account work
-
-A browser window opens for the Google login. Back in the terminal the tool
-asks one question: when should Claude use this account? Answer in one plain
-sentence, the way you would tell a colleague:
-
-    the company mailbox; use it by default
-
-That sentence is what Claude reads to choose between your accounts, so
-mention the words you actually use. The first account you add becomes the
-default.
-
-**5. Add the others.**
-
-    minuar-multi-gmail add-account personal
-    minuar-multi-gmail add-account house
-
-with descriptions such as `my personal gmail; use it when I say personal or
-private` or `the inbox for the two rental houses; use it when I mention the
-house, the lease or the landlord`.
-
-**6. Restart Claude Code** and ask it something about your mail.
+1. In the Google Cloud console create a project, enable the Gmail API, set
+   the consent screen to External and publish it, create an OAuth client of
+   type Desktop app and download its JSON.
+2. `scripts/install.sh` (without a terminal it only builds) and
+   `claude mcp add --scope user gmail -- ~/.local/bin/minuar-multi-gmail serve`.
+3. `minuar-multi-gmail setup ~/Downloads/client_secret_1234.json`, then
+   delete the file. On Linux without a keyring, prefix the command with
+   `MINUAR_MULTI_GMAIL_SECRETS=file` to accept the file store.
+4. `minuar-multi-gmail add-account work`, answer the description question
+   with one plain sentence such as `the company mailbox; use it by default`.
+   The first account becomes the default.
+5. Repeat for the other accounts, then restart Claude Code.
 
 ## Everyday commands
 
 | Command | What it does |
 |---------|--------------|
+| `minuar-multi-gmail wizard` | Set everything up, or add an account later. Skips what is done. |
 | `minuar-multi-gmail accounts` | Show every alias, its address, which one is the default, and its description. |
 | `minuar-multi-gmail set-description personal "…"` | Change the sentence for an account. `--clear` removes it. Restart Claude Code afterwards. |
 | `minuar-multi-gmail set-default personal` | Change the default account. |
