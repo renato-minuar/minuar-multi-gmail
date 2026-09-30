@@ -14,7 +14,8 @@ Once it is set up you can say things like:
 - "Archive everything from that newsletter" or "mark the thread read".
 
 It runs on your own machine (macOS or Linux), talks only to Google, and keeps
-every secret in the system's keyring. Nothing is hosted anywhere and no
+every secret in the system keyring, or in a private file on machines without
+one. Nothing is hosted anywhere and no
 credentials ship with the code.
 
 ## How it keeps you safe
@@ -27,19 +28,21 @@ credentials ship with the code.
   they go.
 - There is no permanent delete. Trash is reversible.
 - Attachments are saved only for a fixed list of file types, under
-  `~/Library/Caches/minuar-multi-gmail/attachments`, in a directory only
-  you can read. The name a sender gave a file cannot move it anywhere else.
+  `~/Library/Caches/minuar-multi-gmail/attachments` on macOS and
+  `~/.cache/minuar-multi-gmail/attachments` on Linux (`$XDG_CACHE_HOME` when
+  set), in a directory only you can read. The name a sender gave a file cannot move it anywhere else.
 - Tokens and the OAuth client live in the macOS Keychain or the Linux Secret
   Service. On a machine without a keyring, `setup` offers a file store and
   stores nothing until you accept it with `MINUAR_MULTI_GMAIL_SECRETS=file`;
-  that file is readable by anyone with your user account or root. The config
+  that file is readable by anyone with your user account or root, and a
+  dotfiles repo that tracks `~/.config` would commit `secrets.json`. The config
   file holds only aliases, addresses, the sentences you wrote, and which
   store is in use.
 
 ## Quick start
 
-You need macOS or Linux, Go 1.26 and about fifteen minutes, most of it in the Google
-Cloud console.
+You need macOS or Linux, Go 1.26 and about fifteen minutes, most of it in the
+Google Cloud console.
 
 **1. Get an OAuth client from Google.** In the Google Cloud console create a
 project, enable the Gmail API, set up the consent screen (external, publish
@@ -57,7 +60,9 @@ every click.
     minuar-multi-gmail setup ~/Downloads/client_secret_1234.json
 
 Then delete the downloaded file; the secret store has it now. `setup` prints
-which store it chose and why.
+which store it chose and why. On a Linux machine without a keyring, `setup`
+stops and asks you to accept the file store with
+`MINUAR_MULTI_GMAIL_SECRETS=file`.
 
 **4. Add your first account.**
 
@@ -142,7 +147,7 @@ so you can always tell which mailbox Claude touched.
 |--------|--------------|-------|
 | macOS | Keychain, through the `security` command. | `open` starts the browser. |
 | Linux desktop | Secret Service (GNOME Keyring, KWallet) through `secret-tool`. Install `libsecret-tools` (Debian, Ubuntu) or `libsecret` (Fedora, Arch). | `xdg-open` starts the browser. |
-| Linux server | No keyring answers, so `setup` offers `secrets.json` in the config directory, mode 0600. Accept it with `MINUAR_MULTI_GMAIL_SECRETS=file` on the `setup` call. | No browser: `add-account` prints the login URL; open it from another machine with an SSH port forward to the port it names. |
+| Linux server | No keyring answers, so `setup` offers `secrets.json` in the config directory, mode 0600. Accept it with `MINUAR_MULTI_GMAIL_SECRETS=file` on the `setup` call. | No browser. `add-account` prints the login URL and the port it listens on. Either forward that port from your own machine (`ssh -L <port>:127.0.0.1:<port> <server>`) and open the URL there, or open the URL anywhere, let the final redirect to 127.0.0.1 fail, and run `curl` with that failed address on the server. |
 | Windows | Compiles and uses `secrets.json`. Not tested. | `rundll32` starts the browser. |
 
 `setup` probes the system once, says which store it chose and why, and

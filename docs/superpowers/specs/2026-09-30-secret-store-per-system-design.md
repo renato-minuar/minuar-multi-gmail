@@ -30,7 +30,7 @@ Moving secrets between stores. A passphrase-encrypted file.
   secret on stdout (trailing newline trimmed). Exit 1 with empty stderr is
   `ErrNotFound`. Anything else is a failure with stderr in the message.
 - Set: `secret-tool store --label=minuar-multi-gmail <name> service <svc> account <name>`
-  with the secret on stdin followed by a newline. Then Get and compare, as
+  with the secret on stdin, no trailing newline (secret-tool stores stdin verbatim). Then Get and compare, as
   `keychainStore.Set` does.
 - Delete: Get first; `ErrNotFound` propagates. Then
   `secret-tool clear service <svc> account <name>`.
