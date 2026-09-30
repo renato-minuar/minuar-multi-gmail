@@ -154,13 +154,13 @@ func TestWizardDefault(t *testing.T) {
 
 	cfg.Add(config.Account{Alias: "work", Email: "a@minuar.com", AddedAt: fixedNow()})
 	config.Save(d.configDir, cfg)
-	d.in = strings.NewReader("nope\nwork\n")
+	d.in = strings.NewReader("nope\n\n")
 	d.lineCh = nil
 	if err := wizardDefault(d); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := config.Load(d.configDir)
-	if got.Default != "work" || strings.Count(out.String(), "Default account [personal]") != 2 || !strings.Contains(out.String(), "no account \"nope\"") {
+	if got.Default != "work" || strings.Count(out.String(), "Default account [work]") != 2 || !strings.Contains(out.String(), "no account \"nope\"") {
 		t.Fatalf("default %q out %q", got.Default, out.String())
 	}
 
@@ -196,21 +196,53 @@ func TestRunWizardEverythingDoneSkips(t *testing.T) {
 func TestRunWizardFreshRunOnDarwin(t *testing.T) {
 	st := secrets.NewMem()
 	// w3: Enter x3, then a pasted path, then y (delete). w4: Y, Enter,
-	// Enter, then n. w5: one account, no question.
+	// Enter for a gmail account; y, Enter, Enter for a company account;
+	// then n. w5: Enter accepts the proposed default.
 	clientPath := writeClientFile(t, t.TempDir(), "client_secret_x.json", time.Date(2026, 9, 30, 11, 0, 0, 0, time.UTC))
-	d, out := flowDeps(t, "\n\n\n"+clientPath+"\ny\n"+"\n\n\n"+"n\n", st, "ann@minuar.com")
+	d, out := flowDeps(t, "\n\n\n"+clientPath+"\ny\n"+"\n\n\n"+"y\n\n\n"+"n\n"+"\n", st, "ann@gmail.com", "ann@minuar.com")
 	if err := runWizard(context.Background(), d); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 	cfg, _ := config.Load(d.configDir)
-	if cfg.Secrets != "keychain" || len(cfg.Accounts) != 1 || cfg.Accounts[0].Alias != "work" || cfg.Default != "work" {
+	if cfg.Secrets != "keychain" || len(cfg.Accounts) != 2 || cfg.Accounts[0].Alias != "personal" || cfg.Accounts[1].Alias != "work" || cfg.Default != "work" {
 		t.Fatalf("config = %+v", cfg)
 	}
 	if _, err := os.Stat(clientPath); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("the pasted file must be deleted after y")
 	}
+	if !strings.Contains(out.String(), "Default account [work]") {
+		t.Fatalf("w5 must propose work:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "ok   work           ann@minuar.com") {
 		t.Fatalf("doctor line missing:\n%s", out.String())
+	}
+}
+
+func TestRunWizardFailedDoctorIsAnError(t *testing.T) {
+	st := seededStore(t)
+	d, out := flowDeps(t, "n\n", st)
+	cfg := &config.File{Version: 1, Secrets: "keychain"}
+	cfg.Add(config.Account{Alias: "work", Email: "a@minuar.com", AddedAt: fixedNow()})
+	config.Save(d.configDir, cfg)
+	st.Set(secrets.RefreshTokenKey("work"), "rt-a~minuar.com")
+	d.doctorProfile = func(context.Context, oauth2.TokenSource) (string, error) {
+		return "", errors.New("invalid_grant")
+	}
+	err := runWizard(context.Background(), d)
+	if err == nil || !strings.Contains(err.Error(), "checks failed") || !strings.Contains(out.String(), "Some checks failed; see the FAIL lines above.") {
+		t.Fatalf("err = %v out %s", err, out.String())
+	}
+}
+
+func TestRunWizardFailedDoctorWithoutAccountsIsNotAnError(t *testing.T) {
+	st := seededStore(t)
+	d, _ := flowDeps(t, "n\n", st)
+	config.Save(d.configDir, &config.File{Version: 1, Secrets: "keychain"})
+	d.doctorProfile = func(context.Context, oauth2.TokenSource) (string, error) {
+		return "", errors.New("never called")
+	}
+	if err := runWizard(context.Background(), d); err != nil {
+		t.Fatalf("err = %v", err)
 	}
 }
 

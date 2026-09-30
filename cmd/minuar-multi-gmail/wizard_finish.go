@@ -24,8 +24,12 @@ func wizardDefault(d *wizardDeps) error {
 		fmt.Fprintf(d.out, "Only account: %s is the default.\n", cfg.Accounts[0].Alias)
 		return nil
 	}
+	proposal := cfg.Default
+	if _, ok := cfg.Find("work"); ok {
+		proposal = "work"
+	}
 	for {
-		alias, err := ask(d, "Default account", cfg.Default)
+		alias, err := ask(d, "Default account", proposal)
 		if err != nil {
 			return err
 		}
@@ -41,8 +45,9 @@ func wizardDefault(d *wizardDeps) error {
 }
 
 // wizardCheck is step w6: doctor, then the last instruction.
-func wizardCheck(ctx context.Context, d *wizardDeps, store secrets.Store, kind secrets.Kind) {
+func wizardCheck(ctx context.Context, d *wizardDeps, store secrets.Store, kind secrets.Kind) bool {
 	heading(d, "Check")
-	runDoctor(ctx, doctorDeps{store: store, storeKind: kind, configDir: d.configDir, profile: d.doctorProfile, out: d.out})
+	ok := runDoctor(ctx, doctorDeps{store: store, storeKind: kind, configDir: d.configDir, profile: d.doctorProfile, out: d.out})
 	fmt.Fprintln(d.out, "\nRestart Claude Code, then ask it about your mail.")
+	return ok
 }

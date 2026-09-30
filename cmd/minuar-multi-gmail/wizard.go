@@ -213,7 +213,16 @@ func runWizard(ctx context.Context, d *wizardDeps) error {
 	if err := wizardDefault(d); err != nil {
 		return err
 	}
-	wizardCheck(ctx, d, store, kind)
+	if !wizardCheck(ctx, d, store, kind) {
+		cfg, err := config.Load(d.configDir)
+		if err != nil {
+			return err
+		}
+		if len(cfg.Accounts) > 0 {
+			fmt.Fprintln(d.out, "Some checks failed; see the FAIL lines above.")
+			return errors.New("checks failed")
+		}
+	}
 	return nil
 }
 
