@@ -52,6 +52,10 @@ func usage(w io.Writer) {
 
 func run(ctx context.Context, args []string, io stdio) int {
 	if len(args) == 0 {
+		// A bare call from a shell is the first thing a new user tries.
+		if stdinIsTerminal() {
+			return commands["wizard"](ctx, nil, io)
+		}
 		usage(io.err)
 		return 2
 	}

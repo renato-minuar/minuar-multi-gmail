@@ -55,3 +55,13 @@ func TestVersionCommand(t *testing.T) {
 		t.Fatalf("code=%d out=%q", code, out.String())
 	}
 }
+
+// Without a terminal, a bare invocation prints the usage as before; with
+// one it would start the wizard (not testable here).
+func TestBareInvocationWithoutTerminalPrintsUsage(t *testing.T) {
+	var out, errOut bytes.Buffer
+	code := run(context.Background(), nil, stdio{out: &out, err: &errOut})
+	if code != 2 || !strings.Contains(errOut.String(), "Usage: minuar-multi-gmail <command>") || !strings.Contains(errOut.String(), "wizard") {
+		t.Fatalf("code %d err %q", code, errOut.String())
+	}
+}
