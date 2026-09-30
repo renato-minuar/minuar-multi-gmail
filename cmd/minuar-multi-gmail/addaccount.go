@@ -112,8 +112,13 @@ func init() {
 			fmt.Fprintln(io.err, "error:", err)
 			return 1
 		}
+		_, store, err := openStore(dir)
+		if err != nil {
+			fmt.Fprintln(io.err, "error:", err)
+			return 1
+		}
 		d := addAccountDeps{
-			store: secrets.NewKeychain(secrets.ServiceName()), configDir: dir, out: io.out, now: time.Now,
+			store: store, configDir: dir, out: io.out, now: time.Now,
 			in: os.Stdin, prompt: stdinIsTerminal(),
 			login: func(ctx context.Context, creds googleauth.ClientCreds) (*oauth2.Token, error) {
 				return googleauth.Login(ctx, googleauth.LoginOptions{Creds: creds, OpenURL: openBrowser, Notify: io.out})

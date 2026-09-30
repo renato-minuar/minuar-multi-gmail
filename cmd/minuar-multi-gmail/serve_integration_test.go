@@ -51,7 +51,7 @@ func TestServeOverStdio(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.Command(bin, "serve")
-	cmd.Env = append(os.Environ(), config.EnvDir+"="+cfgDir, envAttachmentDir+"="+t.TempDir(), secrets.EnvService+"=com.minuar.multi-gmail.test")
+	cmd.Env = append(os.Environ(), config.EnvDir+"="+cfgDir, envAttachmentDir+"="+t.TempDir(), secrets.EnvKind+"=file", secrets.EnvService+"=com.minuar.multi-gmail.test")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -178,6 +178,16 @@ func TestServeOverStdio(t *testing.T) {
 	errText := res.Content[0].(*mcp.TextContent).Text
 	if !strings.Contains(errText, "personal") || !strings.Contains(errText, "work") {
 		t.Fatalf("error text = %q, want the known aliases", errText)
+	}
+
+	// A known account with an empty file store: the tool call reaches the
+	// store and reports the missing OAuth client instead of crashing.
+	res, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "search_threads", Arguments: map[string]any{"query": "x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "secret not found") {
+		t.Fatalf("search_threads with an empty secret store: %+v", res.Content)
 	}
 
 	// The SDK validates arguments against the schema before the handler

@@ -90,9 +90,13 @@ func init() {
 			return 2
 		}
 		dir, err := config.Dir()
+		var store secrets.Store
+		if err == nil {
+			_, store, err = openStore(dir)
+		}
 		if err == nil {
 			revoke := func(ctx context.Context, tok string) error { return googleauth.Revoke(ctx, "", tok) }
-			err = runRemoveAccount(ctx, secrets.NewKeychain(secrets.ServiceName()), dir, args[0], revoke, io.out)
+			err = runRemoveAccount(ctx, store, dir, args[0], revoke, io.out)
 		}
 		if err != nil {
 			fmt.Fprintln(io.err, "error:", err)

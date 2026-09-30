@@ -14,7 +14,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/renato-minuar/minuar-multi-gmail/internal/config"
-	"github.com/renato-minuar/minuar-multi-gmail/internal/secrets"
 	"github.com/renato-minuar/minuar-multi-gmail/internal/tools"
 )
 
@@ -104,11 +103,16 @@ func init() {
 			logger.Error("config dir", "err", err)
 			return 1
 		}
-		p := newProvider(secrets.NewKeychain(secrets.ServiceName()), dir)
+		kind, store, err := openStore(dir)
+		if err != nil {
+			logger.Error("secret store unavailable; every tool call will report it", "err", err)
+			store = failingStore{err: err}
+		}
+		p := newProvider(store, dir)
 		server := buildServer(p, logger, io.err)
 		ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		logger.Info("minuar-multi-gmail serve", "version", version, "config", dir)
+		logger.Info("minuar-multi-gmail serve", "version", version, "config", dir, "secrets", kind)
 		if err := server.Run(ctx, &mcp.StdioTransport{}); err != nil {
 			logger.Error("server stopped", "err", err)
 			fmt.Fprintln(io.err, "error:", err)

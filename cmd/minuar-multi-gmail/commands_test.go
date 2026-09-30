@@ -367,10 +367,13 @@ func TestRunDoctor(t *testing.T) {
 	// personal has no stored token on purpose
 
 	var out bytes.Buffer
-	ok := runDoctor(context.Background(), doctorDeps{store: st, configDir: dir, out: &out,
+	ok := runDoctor(context.Background(), doctorDeps{store: st, storeKind: secrets.KindFile, configDir: dir, out: &out,
 		profile: func(context.Context, oauth2.TokenSource) (string, error) { return "control@example.com", nil }})
 	if ok {
 		t.Fatal("doctor must fail when one account has no token")
+	}
+	if !strings.HasPrefix(out.String(), "ok   secrets        file") {
+		t.Fatalf("doctor must name the store first: %q", out.String())
 	}
 	s := out.String()
 	if !strings.Contains(s, "ok") || !strings.Contains(s, "work") || !strings.Contains(s, "FAIL") || !strings.Contains(s, "personal") || !strings.Contains(s, "needs re-login") {
@@ -379,7 +382,7 @@ func TestRunDoctor(t *testing.T) {
 
 	st.Set(secrets.RefreshTokenKey("personal"), "1//0gPersonal")
 	out.Reset()
-	ok = runDoctor(context.Background(), doctorDeps{store: st, configDir: dir, out: &out,
+	ok = runDoctor(context.Background(), doctorDeps{store: st, storeKind: secrets.KindFile, configDir: dir, out: &out,
 		profile: func(context.Context, oauth2.TokenSource) (string, error) { return "control@example.com", nil }})
 	if ok || !strings.Contains(out.String(), "expected p@gmail.com") {
 		t.Fatalf("email mismatch must fail: ok=%v out=%q", ok, out.String())
@@ -387,7 +390,7 @@ func TestRunDoctor(t *testing.T) {
 
 	out.Reset()
 	calls := 0
-	ok = runDoctor(context.Background(), doctorDeps{store: st, configDir: dir, out: &out,
+	ok = runDoctor(context.Background(), doctorDeps{store: st, storeKind: secrets.KindFile, configDir: dir, out: &out,
 		profile: func(context.Context, oauth2.TokenSource) (string, error) {
 			calls++
 			if calls == 1 {
@@ -400,7 +403,7 @@ func TestRunDoctor(t *testing.T) {
 	}
 
 	out.Reset()
-	if runDoctor(context.Background(), doctorDeps{store: secrets.NewMem(), configDir: dir, out: &out, profile: nil}) {
+	if runDoctor(context.Background(), doctorDeps{store: secrets.NewMem(), storeKind: secrets.KindFile, configDir: dir, out: &out, profile: nil}) {
 		t.Fatal("missing client creds must fail")
 	}
 }
