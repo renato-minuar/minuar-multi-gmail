@@ -152,17 +152,9 @@ func runAddAccount(ctx context.Context, d addAccountDeps, args addAccountArgs) e
 	if _, exists := cfg.Find(alias); !exists && replace {
 		return fmt.Errorf("alias %q does not exist; drop --replace", alias)
 	}
-	creds, err := googleauth.LoadClientCreds(d.store)
+	tok, email, err := loginAccount(ctx, d.store, d.login, d.profile)
 	if err != nil {
 		return err
-	}
-	tok, err := d.login(ctx, creds)
-	if err != nil {
-		return err
-	}
-	email, err := d.profile(ctx, tok)
-	if err != nil {
-		return fmt.Errorf("read account email: %w", err)
 	}
 	description := ""
 	if existing, ok := cfg.Find(alias); ok {
@@ -185,20 +177,7 @@ func runAddAccount(ctx context.Context, d addAccountDeps, args addAccountArgs) e
 		}
 	}
 	acct := config.Account{Alias: alias, Email: email, Description: description, AddedAt: d.now().UTC()}
-	if replace {
-		err = cfg.Replace(acct)
-	} else {
-		err = cfg.Add(acct)
-	}
-	if err != nil {
-		return err
-	}
-	key := secrets.RefreshTokenKey(alias)
-	if err := d.store.Set(key, tok.RefreshToken); err != nil {
-		return fmt.Errorf("store refresh token: %w", err)
-	}
-	if err := config.Save(d.configDir, cfg); err != nil {
-		d.store.Delete(key)
+	if err := saveAccount(d.configDir, d.store, cfg, acct, tok, replace); err != nil {
 		return err
 	}
 	fmt.Fprintf(d.out, "Connected %s as %q.", email, alias)
@@ -208,6 +187,51 @@ func runAddAccount(ctx context.Context, d addAccountDeps, args addAccountArgs) e
 	fmt.Fprintln(d.out)
 	if description == "" {
 		fmt.Fprintf(d.out, "No description set. Add one with: minuar-multi-gmail set-description %s \"<text>\"\n", alias)
+	}
+	return nil
+}
+
+// loginAccount loads the OAuth client, runs the browser login and returns
+// the token with the address it belongs to. The wizard calls it before it
+// knows the alias, because the address is what the alias is proposed from.
+func loginAccount(ctx context.Context, store secrets.Store,
+	login func(context.Context, googleauth.ClientCreds) (*oauth2.Token, error),
+	profile func(context.Context, *oauth2.Token) (string, error)) (*oauth2.Token, string, error) {
+	creds, err := googleauth.LoadClientCreds(store)
+	if err != nil {
+		return nil, "", err
+	}
+	tok, err := login(ctx, creds)
+	if err != nil {
+		return nil, "", err
+	}
+	email, err := profile(ctx, tok)
+	if err != nil {
+		return nil, "", fmt.Errorf("read account email: %w", err)
+	}
+	return tok, email, nil
+}
+
+// saveAccount records the account and its refresh token. The token is
+// stored before the config so a failed save can remove it again; a config
+// without the account and a store without the token is the clean state.
+func saveAccount(configDir string, store secrets.Store, cfg *config.File, acct config.Account, tok *oauth2.Token, replace bool) error {
+	var err error
+	if replace {
+		err = cfg.Replace(acct)
+	} else {
+		err = cfg.Add(acct)
+	}
+	if err != nil {
+		return err
+	}
+	key := secrets.RefreshTokenKey(acct.Alias)
+	if err := store.Set(key, tok.RefreshToken); err != nil {
+		return fmt.Errorf("store refresh token: %w", err)
+	}
+	if err := config.Save(configDir, cfg); err != nil {
+		store.Delete(key)
+		return err
 	}
 	return nil
 }
