@@ -11,6 +11,8 @@ Once it is set up you can say things like:
   them, shows you the list, and sends after you say yes.
 - "Draft a reply to Ann saying Thursday works." A draft appears in Gmail;
   nothing goes out until you ask.
+- "What is the total on the invoice attached to that mail?" Claude saves the
+  PDF to a private folder on your machine and reads it.
 - "Archive everything from that newsletter" or "mark the thread read".
 
 It runs on your own machine (macOS or Linux), talks only to Google, and keeps

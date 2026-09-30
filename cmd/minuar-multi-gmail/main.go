@@ -1,5 +1,5 @@
-// Command minuar-multi-gmail serves two Gmail accounts to Claude Code over MCP and
-// manages the account logins that make that possible.
+// Command minuar-multi-gmail serves several Gmail accounts to Claude Code over
+// MCP and manages the account logins that make that possible.
 package main
 
 import (
