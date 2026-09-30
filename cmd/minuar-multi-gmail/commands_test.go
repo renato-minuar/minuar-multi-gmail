@@ -30,13 +30,30 @@ func seededStore(t *testing.T) *secrets.Mem {
 	return st
 }
 
-func TestRunSetupStoresCredsAndTellsToDelete(t *testing.T) {
+// setupWith builds setupDeps whose detect returns kind and why, and whose
+// open hands out the given store for that kind.
+func setupWith(t *testing.T, dir, goos, envKind string, kind secrets.Kind, why string, st secrets.Store) setupDeps {
+	t.Helper()
+	return setupDeps{
+		configDir: dir, goos: goos, envKind: envKind,
+		detect: func(string) (secrets.Kind, string) { return kind, why },
+		open: func(k secrets.Kind) (secrets.Store, error) {
+			if k != kind {
+				t.Fatalf("open(%q), want %q", k, kind)
+			}
+			return st, nil
+		},
+	}
+}
+
+func TestRunSetupStoresCredsAndRecordsTheStore(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "client_secret_x.json")
 	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
 	st := secrets.NewMem()
 	var out bytes.Buffer
-	if err := runSetup(st, path, &out); err != nil {
+	d := setupWith(t, dir, "darwin", "", secrets.KindKeychain, "Secrets go to the macOS Keychain.", st)
+	if err := runSetup(d, path, &out); err != nil {
 		t.Fatal(err)
 	}
 	id, _ := st.Get(secrets.ClientIDKey)
@@ -44,17 +61,94 @@ func TestRunSetupStoresCredsAndTellsToDelete(t *testing.T) {
 	if id != "123-abc.apps.googleusercontent.com" || sec != "GOCSPX-s3cr3t_Value-1" {
 		t.Fatalf("stored id=%q secret=%q", id, sec)
 	}
-	if !strings.Contains(out.String(), "rm "+path) {
-		t.Fatalf("out = %q", out.String())
+	cfg, err := config.Load(dir)
+	if err != nil || cfg.Secrets != "keychain" {
+		t.Fatalf("config = %+v, %v; setup must record the store", cfg, err)
 	}
-	if !strings.Contains(out.String(), "Next: minuar-multi-gmail add-account <alias>") {
-		t.Fatalf("setup must point at the next step: %q", out.String())
+	for _, want := range []string{"Secrets go to the macOS Keychain.", "macOS Keychain", "rm " + path, "Next: minuar-multi-gmail add-account <alias>"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("out lacks %q: %q", want, out.String())
+		}
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal("setup must not delete the file itself")
 	}
-	if err := runSetup(st, filepath.Join(dir, "missing.json"), &out); err == nil {
+	if err := runSetup(d, filepath.Join(dir, "missing.json"), &out); err == nil {
 		t.Fatal("missing file accepted")
+	}
+}
+
+func TestRunSetupKeepsExistingAccountsWhenRecordingTheStore(t *testing.T) {
+	dir := t.TempDir()
+	if err := config.Save(dir, &config.File{Version: 1, Default: "work", Accounts: []config.Account{{Alias: "work", Email: "you@company.example", AddedAt: fixedNow()}}}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "client_secret_x.json")
+	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
+	d := setupWith(t, dir, "darwin", "", secrets.KindKeychain, "Secrets go to the macOS Keychain.", secrets.NewMem())
+	if err := runSetup(d, path, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := config.Load(dir)
+	if cfg.Secrets != "keychain" || cfg.Default != "work" || len(cfg.Accounts) != 1 {
+		t.Fatalf("config = %+v", cfg)
+	}
+}
+
+func TestRunSetupFileStoreNeedsAcceptanceOnLinux(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "client_secret_x.json")
+	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
+	st := secrets.NewMem()
+	why := "No keyring found: secret-tool is not installed."
+
+	var out bytes.Buffer
+	d := setupWith(t, dir, "linux", "", secrets.KindFile, why, st)
+	err := runSetup(d, path, &out)
+	if !errors.Is(err, errFileStoreNotAccepted) {
+		t.Fatalf("err = %v, want errFileStoreNotAccepted", err)
+	}
+	if !strings.Contains(out.String(), why) {
+		t.Fatalf("the reason must be printed: %q", out.String())
+	}
+	if !strings.Contains(err.Error(), secrets.EnvKind+"=file") {
+		t.Fatalf("the error must say how to accept: %v", err)
+	}
+	if _, err := st.Get(secrets.ClientIDKey); !errors.Is(err, secrets.ErrNotFound) {
+		t.Fatal("nothing may be stored before acceptance")
+	}
+	if cfg, _ := config.Load(dir); cfg.Secrets != "" {
+		t.Fatalf("nothing may be recorded before acceptance: %+v", cfg)
+	}
+
+	// Accepted through the environment.
+	out.Reset()
+	d = setupWith(t, dir, "linux", "file", secrets.KindFile, "Secret store forced to file by "+secrets.EnvKind+".", st)
+	if err := runSetup(d, path, &out); err != nil {
+		t.Fatal(err)
+	}
+	if cfg, _ := config.Load(dir); cfg.Secrets != "file" {
+		t.Fatalf("config = %+v", cfg)
+	}
+	if !strings.Contains(out.String(), "file "+filepath.Join(dir, secrets.FileName)) {
+		t.Fatalf("out must name the file: %q", out.String())
+	}
+
+	// Windows has no other store, so no acceptance step.
+	out.Reset()
+	d = setupWith(t, t.TempDir(), "windows", "", secrets.KindFile, "This version has no keyring store for Windows.", secrets.NewMem())
+	if err := runSetup(d, path, &out); err != nil {
+		t.Fatalf("windows: %v", err)
+	}
+}
+
+func TestRunSetupUnknownEnvKind(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "client_secret_x.json")
+	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
+	d := setupWith(t, dir, "linux", "vault", "", `unknown secret store "vault"`, secrets.NewMem())
+	if err := runSetup(d, path, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "vault") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
