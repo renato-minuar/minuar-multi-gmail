@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 )
@@ -103,9 +104,53 @@ func TestHeading(t *testing.T) {
 }
 
 func TestWizardCommandRefusesWithoutTerminal(t *testing.T) {
+	prev := stdinIsTerminal
+	stdinIsTerminal = func() bool { return false }
+	t.Cleanup(func() { stdinIsTerminal = prev })
+
 	var out, errOut bytes.Buffer
 	code := run(context.Background(), []string{"wizard"}, stdio{out: &out, err: &errOut})
 	if code != 2 || !strings.Contains(errOut.String(), "the wizard needs a terminal; run it from your shell") {
 		t.Fatalf("code %d err %q", code, errOut.String())
 	}
+}
+
+func TestBareInvocationWithTerminalStartsTheWizard(t *testing.T) {
+	prev := stdinIsTerminal
+	stdinIsTerminal = func() bool { return true }
+	t.Cleanup(func() { stdinIsTerminal = prev })
+
+	prevWizard := commands["wizard"]
+	calledWizard := false
+	commands["wizard"] = func(ctx context.Context, _ []string, io stdio) int {
+		calledWizard = true
+		return 0
+	}
+	t.Cleanup(func() { commands["wizard"] = prevWizard })
+
+	var out, errOut bytes.Buffer
+	code := run(context.Background(), nil, stdio{out: &out, err: &errOut})
+	if !calledWizard || code != 0 {
+		t.Fatalf("calledWizard=%v code=%d", calledWizard, code)
+	}
+}
+
+func TestIsTerminalFdRejectsDevNullAndPipes(t *testing.T) {
+	f, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatalf("open /dev/null: %v", err)
+	}
+	if isTerminalFd(f.Fd()) {
+		t.Fatalf("/dev/null must not be a terminal")
+	}
+	f.Close()
+
+	r, _, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("pipe: %v", err)
+	}
+	if isTerminalFd(r.Fd()) {
+		t.Fatalf("pipe read end must not be a terminal")
+	}
+	r.Close()
 }

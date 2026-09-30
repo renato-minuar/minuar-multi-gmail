@@ -52,12 +52,9 @@ type addAccountArgs struct {
 	hasDesc     bool
 }
 
-// stdinIsTerminal reports whether stdin is a character device. golang.org/x/term
-// would need a new module for the same answer.
-func stdinIsTerminal() bool {
-	st, err := os.Stdin.Stat()
-	return err == nil && st.Mode()&os.ModeCharDevice != 0
-}
+// stdinIsTerminal reports whether stdin is a terminal. A var so tests can
+// pin the answer instead of depending on how `go test` was started.
+var stdinIsTerminal = func() bool { return isTerminalFd(os.Stdin.Fd()) }
 
 func parseAddAccountArgs(args []string) (addAccountArgs, error) {
 	var parsed addAccountArgs
