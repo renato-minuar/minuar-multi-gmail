@@ -75,14 +75,15 @@ func (s *secretToolStore) Get(name string) (string, error) {
 	}
 }
 
-// Set writes through secret-tool store with the secret on stdin, then
-// reads the item back and compares, as the Keychain store does.
+// Set writes through secret-tool store with the bare secret on stdin (no
+// trailing newline: secret-tool stores stdin verbatim), then reads the item
+// back and compares, as the Keychain store does.
 func (s *secretToolStore) Set(name, secret string) error {
 	if !ValidSecret(secret) {
 		return fmt.Errorf("secret for %s contains characters outside the allowed set", name)
 	}
 	args := append([]string{"store", "--label=minuar-multi-gmail " + name}, s.attrs(name)...)
-	r := s.run(args, secret+"\n")
+	r := s.run(args, secret)
 	if r.err != nil || r.exit != 0 {
 		return s.fail("store", r)
 	}

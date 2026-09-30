@@ -23,8 +23,8 @@ func TestSecretToolSetUsesStdinAndReadsBack(t *testing.T) {
 	if strings.Join(store.args, " ") != "store --label=minuar-multi-gmail refresh-token.work service svc.test account refresh-token.work" {
 		t.Fatalf("store args = %q", store.args)
 	}
-	if store.stdin != "tok\n" {
-		t.Fatalf("secret must travel on stdin with a newline, got %q", store.stdin)
+	if store.stdin != "tok" {
+		t.Fatalf("secret must travel on stdin without a newline, got %q", store.stdin)
 	}
 	if strings.Join(fr.calls[1].args, " ") != "lookup service svc.test account refresh-token.work" {
 		t.Fatalf("lookup args = %q", fr.calls[1].args)
