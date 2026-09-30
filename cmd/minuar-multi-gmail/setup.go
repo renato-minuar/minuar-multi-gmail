@@ -99,14 +99,24 @@ func runSetup(d setupDeps, path string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if err := storeClient(d.configDir, kind, store, cfg, creds, out); err != nil {
+		return err
+	}
+	fmt.Fprintf(out, "Delete the downloaded file now:\n  rm %s\nNext: minuar-multi-gmail add-account <alias>\n", path)
+	return nil
+}
+
+// storeClient saves the OAuth client in store and records kind in
+// accounts.json. It is the last half of setup and the wizard's way to
+// store a file it found by itself.
+func storeClient(configDir string, kind secrets.Kind, store secrets.Store, cfg *config.File, creds googleauth.ClientCreds, out io.Writer) error {
 	if err := googleauth.SaveClientCreds(store, creds); err != nil {
-		return fmt.Errorf("store in %s: %w", kind.Describe(d.configDir), err)
+		return fmt.Errorf("store in %s: %w", kind.Describe(configDir), err)
 	}
 	cfg.Secrets = string(kind)
-	if err := config.Save(d.configDir, cfg); err != nil {
-		return fmt.Errorf("credentials are stored in %s but not recorded in accounts.json: %w; fix the file and run setup again", kind.Describe(d.configDir), err)
+	if err := config.Save(configDir, cfg); err != nil {
+		return fmt.Errorf("credentials are stored in %s but not recorded in accounts.json: %w; fix the file and run setup again", kind.Describe(configDir), err)
 	}
-	fmt.Fprintf(out, "Stored OAuth client %s in the %s.\nDelete the downloaded file now:\n  rm %s\nNext: minuar-multi-gmail add-account <alias>\n",
-		creds.ID, kind.Describe(d.configDir), path)
+	fmt.Fprintf(out, "Stored OAuth client %s in the %s.\n", creds.ID, kind.Describe(configDir))
 	return nil
 }

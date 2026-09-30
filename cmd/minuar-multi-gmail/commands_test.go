@@ -730,3 +730,25 @@ func TestRunSetupCorruptConfigFailsBeforeTheStoreIsTouched(t *testing.T) {
 		t.Fatal("the store must stay empty when accounts.json is corrupt")
 	}
 }
+
+func TestStoreClientRecordsTheKindAndKeepsAccounts(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &config.File{Version: 1, Default: "work", Accounts: []config.Account{{Alias: "work", Email: "you@company.example", AddedAt: fixedNow()}}}
+	st := secrets.NewMem()
+	var out bytes.Buffer
+	err := storeClient(dir, secrets.KindFile, st, cfg, googleauth.ClientCreds{ID: "id.apps", Secret: "GOCSPX-x"}, &out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id, _ := st.Get(secrets.ClientIDKey); id != "id.apps" {
+		t.Fatalf("client id = %q", id)
+	}
+	got, _ := config.Load(dir)
+	if got.Secrets != "file" || got.Default != "work" || len(got.Accounts) != 1 {
+		t.Fatalf("config = %+v", got)
+	}
+	want := "Stored OAuth client id.apps in the file " + filepath.Join(dir, secrets.FileName) + ".\n"
+	if out.String() != want {
+		t.Fatalf("out = %q, want %q", out.String(), want)
+	}
+}
