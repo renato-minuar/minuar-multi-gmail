@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/renato-minuar/minuar-multi-gmail/internal/config"
 	"github.com/renato-minuar/minuar-multi-gmail/internal/secrets"
@@ -34,6 +35,17 @@ func wizardAccounts(ctx context.Context, d *wizardDeps, store secrets.Store) err
 		if err != nil {
 			return err
 		}
+		duplicate := false
+		for _, a := range cfg.Accounts {
+			if strings.EqualFold(a.Email, email) {
+				fmt.Fprintf(d.out, "Not added: %s is already connected as alias %q\n", email, a.Alias)
+				duplicate = true
+				break
+			}
+		}
+		if duplicate {
+			continue
+		}
 		taken := func(alias string) bool { _, ok := cfg.Find(alias); return ok }
 		alias, err := askAlias(d, proposeAlias(email, taken), taken)
 		if err != nil {
@@ -44,12 +56,11 @@ func wizardAccounts(ctx context.Context, d *wizardDeps, store secrets.Store) err
 			return err
 		}
 		acct := config.Account{Alias: alias, Email: email, Description: description, AddedAt: d.now().UTC()}
+		// saveAccount fails on the store or the disk; cfg.Add also rejects a
+		// taken alias or duplicate address, but both were ruled out above.
+		// Every error left is fatal, so it is returned as is.
 		if err := saveAccount(d.configDir, store, cfg, acct, tok, false); err != nil {
-			// A duplicate address is the one save error the user can cause;
-			// report it and offer the next round instead of stopping.
-			fmt.Fprintf(d.out, "Not added: %v\n", err)
-			cfg, _ = config.Load(d.configDir)
-			continue
+			return err
 		}
 		added++
 		fmt.Fprintf(d.out, "Connected %s as %q.\n", email, alias)

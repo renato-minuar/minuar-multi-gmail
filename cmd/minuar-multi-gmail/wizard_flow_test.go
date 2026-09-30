@@ -108,7 +108,8 @@ func TestWizardAccountsInvalidAliasReAsks(t *testing.T) {
 
 func TestWizardAccountsDuplicateEmailIsReported(t *testing.T) {
 	st := seededStore(t)
-	d, out := flowDeps(t, "\n\n\n"+"y\n\n\n"+"n\n", st, "ann@gmail.com", "ann@gmail.com")
+	// The duplicate is reported right after the login, before alias and description.
+	d, out := flowDeps(t, "\n\n\n"+"y\n"+"n\n", st, "ann@gmail.com", "ann@gmail.com")
 	if err := wizardAccounts(context.Background(), d, st); err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +148,7 @@ func TestWizardDefault(t *testing.T) {
 	cfg := &config.File{Version: 1}
 	cfg.Add(config.Account{Alias: "personal", Email: "a@gmail.com", AddedAt: fixedNow()})
 	config.Save(d.configDir, cfg)
-	if err := wizardDefault(d); err != nil || strings.Contains(out.String(), "Default account") {
+	if err := wizardDefault(d); err != nil || !strings.Contains(out.String(), "== Default account") || !strings.Contains(out.String(), "Only account: personal is the default.") || strings.Contains(out.String(), "Default account [") {
 		t.Fatalf("one account must not ask: %v %q", err, out.String())
 	}
 
@@ -228,5 +229,23 @@ func TestRunWizardLinuxRefusalWritesNothing(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(d.configDir); len(entries) != 0 || runs != 0 {
 		t.Fatalf("nothing may happen after a refusal: entries %v runs %d", entries, runs)
+	}
+}
+
+// failingSetStore reads from a seeded store and fails every write.
+type failingSetStore struct{ secrets.Store }
+
+func (failingSetStore) Set(string, string) error { return errors.New("disk full") }
+
+func TestWizardAccountsStoreFailureStopsTheWizard(t *testing.T) {
+	st := failingSetStore{seededStore(t)}
+	d, out := flowDeps(t, "\n\n\nn\n", st, "ann@gmail.com")
+	err := wizardAccounts(context.Background(), d, st)
+	if err == nil || !strings.Contains(err.Error(), "store refresh token") {
+		t.Fatalf("err = %v out %q", err, out.String())
+	}
+	cfg, _ := config.Load(d.configDir)
+	if len(cfg.Accounts) != 0 {
+		t.Fatalf("accounts = %+v", cfg.Accounts)
 	}
 }

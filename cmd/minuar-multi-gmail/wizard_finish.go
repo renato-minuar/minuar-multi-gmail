@@ -9,16 +9,21 @@ import (
 )
 
 // wizardDefault is step w5: with several accounts, confirm or change the
-// default. One account is the default already.
+// default. One account is the default already; the step says so.
 func wizardDefault(d *wizardDeps) error {
 	cfg, err := config.Load(d.configDir)
 	if err != nil {
 		return err
 	}
-	if len(cfg.Accounts) < 2 {
+	heading(d, "Default account")
+	switch len(cfg.Accounts) {
+	case 0:
+		fmt.Fprintln(d.out, "No account yet.")
+		return nil
+	case 1:
+		fmt.Fprintf(d.out, "Only account: %s is the default.\n", cfg.Accounts[0].Alias)
 		return nil
 	}
-	heading(d, "Default account")
 	for {
 		alias, err := ask(d, "Default account", cfg.Default)
 		if err != nil {
