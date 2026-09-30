@@ -2,10 +2,12 @@ package secrets
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // secretToolStore is the Linux desktop store. It shells out to
@@ -27,8 +29,15 @@ func newSecretToolStore(service string, run func([]string, string) runResult) *s
 	return &secretToolStore{service: service, run: run}
 }
 
+// secretToolTimeout bounds one secret-tool call. A locked keyring makes
+// secret-tool wait on an unlock prompt, which a user over SSH never sees.
+// A var so tests can lower it.
+var secretToolTimeout = 30 * time.Second
+
 func runSecretTool(args []string, stdin string) runResult {
-	cmd := exec.Command("secret-tool", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), secretToolTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "secret-tool", args...)
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
@@ -40,6 +49,8 @@ func runSecretTool(args []string, stdin string) runResult {
 	var exitErr *exec.ExitError
 	switch {
 	case err == nil:
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		res.err = fmt.Errorf("secret-tool timed out after %s: is the keyring locked? Unlock it in your desktop session and try again", secretToolTimeout)
 	case errors.As(err, &exitErr):
 		res.exit = exitErr.ExitCode()
 	default:

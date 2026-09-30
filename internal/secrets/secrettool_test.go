@@ -2,8 +2,12 @@ package secrets
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newFakeSecretTool(results ...runResult) (*secretToolStore, *fakeRunner) {
@@ -103,5 +107,29 @@ func TestSecretToolDelete(t *testing.T) {
 	}
 	if len(fr.calls) != 1 {
 		t.Fatalf("clear must not run for a missing item: %+v", fr.calls)
+	}
+}
+
+// A locked keyring makes secret-tool wait on an unlock prompt the user may
+// never see (over SSH). The call must give up and say so.
+func TestRunSecretToolTimesOut(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell script fake")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "secret-tool"), []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	old := secretToolTimeout
+	secretToolTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { secretToolTimeout = old })
+	start := time.Now()
+	r := runSecretTool([]string{"lookup", "service", "x", "account", "y"}, "")
+	if r.err == nil || !strings.Contains(r.err.Error(), "timed out") || !strings.Contains(r.err.Error(), "locked") {
+		t.Fatalf("runResult = %+v, want a timeout error that mentions a locked keyring", r)
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Fatal("the call waited for the script instead of timing out")
 	}
 }
