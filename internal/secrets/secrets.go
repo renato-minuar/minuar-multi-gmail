@@ -1,5 +1,5 @@
 // Package secrets stores OAuth client credentials and refresh tokens.
-// The only production store is the macOS Keychain.
+// Production stores: the macOS Keychain, the Linux Secret Service through secret-tool, and a file for systems without a keyring. setup picks one per system (kind.go).
 package secrets
 
 import (

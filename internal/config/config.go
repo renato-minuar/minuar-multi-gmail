@@ -1,5 +1,5 @@
 // Package config stores the list of connected accounts and the default
-// alias in ~/.config/minuar-multi-gmail/accounts.json. It never holds secrets.
+// alias in ~/.config/minuar-multi-gmail/accounts.json. It never holds secrets; it records which store does.
 package config
 
 import (
@@ -36,8 +36,12 @@ type Account struct {
 }
 
 type File struct {
-	Version  int       `json:"version"`
-	Default  string    `json:"default,omitempty"`
+	Version int    `json:"version"`
+	Default string `json:"default,omitempty"`
+	// Secrets is the secret store kind chosen by setup: "keychain",
+	// "secret-service" or "file". Empty in files written before the
+	// choice existed, which every command reads as the macOS Keychain.
+	Secrets  string    `json:"secrets,omitempty"`
 	Accounts []Account `json:"accounts"`
 }
 

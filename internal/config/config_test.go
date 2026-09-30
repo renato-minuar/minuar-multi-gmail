@@ -272,3 +272,21 @@ func TestDescriptionRoundTripAndSetDescription(t *testing.T) {
 		t.Fatalf("SetDescription on unknown alias err = %v", err)
 	}
 }
+
+func TestSecretsFieldRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	f := &File{Version: 1, Secrets: "file"}
+	if err := Save(dir, f); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(dir)
+	if err != nil || got.Secrets != "file" {
+		t.Fatalf("Load = %+v, %v", got, err)
+	}
+	// An older file without the field loads with an empty kind.
+	os.WriteFile(filepath.Join(dir, FileName), []byte(`{"version":1,"accounts":[]}`), 0o600)
+	got, err = Load(dir)
+	if err != nil || got.Secrets != "" {
+		t.Fatalf("Load without the field = %+v, %v", got, err)
+	}
+}
