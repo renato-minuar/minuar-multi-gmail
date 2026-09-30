@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -52,8 +51,6 @@ type addAccountArgs struct {
 	description string
 	hasDesc     bool
 }
-
-func openBrowser(url string) error { return exec.Command("open", url).Run() }
 
 // stdinIsTerminal reports whether stdin is a character device. golang.org/x/term
 // would need a new module for the same answer.

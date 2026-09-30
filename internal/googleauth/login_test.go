@@ -187,9 +187,37 @@ func TestLoginOpenURLFailure(t *testing.T) {
 	g := newFakeGoogle(t, "rt")
 	_, err := Login(context.Background(), LoginOptions{
 		Creds: ClientCreds{ID: "id", Secret: "sec"}, OpenURL: func(string) error { return errors.New("no browser") },
-		Endpoint: g.endpoint(), Timeout: time.Second,
+		Endpoint: g.endpoint(), Timeout: 200 * time.Millisecond,
 	})
-	if err == nil || !strings.Contains(err.Error(), "no browser") {
-		t.Fatalf("err = %v", err)
+	// With no Notify writer and a failed open, login continues and times out
+	// waiting for the callback that never arrives.
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("err = %v, want timeout", err)
+	}
+}
+
+// A machine without a browser (a server over SSH) still completes the
+// login: the URL is printed, the open fails, the callback arrives.
+func TestLoginContinuesWhenBrowserCannotOpen(t *testing.T) {
+	g := newFakeGoogle(t, "rt")
+	var saw url.Values
+	open := browser(t, "", &saw)
+	var notes strings.Builder
+	tok, err := Login(context.Background(), LoginOptions{
+		Creds: ClientCreds{ID: "id", Secret: "sec"},
+		OpenURL: func(u string) error {
+			open(u) // the test's stand-in for the user pasting the URL
+			return errors.New("exec: \"xdg-open\": executable file not found in $PATH")
+		},
+		Endpoint: g.endpoint(), Timeout: 5 * time.Second, Notify: &notes,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tok.RefreshToken != "rt" {
+		t.Fatalf("token = %+v", tok)
+	}
+	if !strings.Contains(notes.String(), "Could not open a browser") || !strings.Contains(notes.String(), "xdg-open") {
+		t.Fatalf("notify = %q", notes.String())
 	}
 }

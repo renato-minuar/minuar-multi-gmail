@@ -100,8 +100,10 @@ func Login(ctx context.Context, o LoginOptions) (*oauth2.Token, error) {
 	if o.Notify != nil {
 		fmt.Fprintf(o.Notify, "Opening your browser. If it does not open, visit:\n%s\n", authURL)
 	}
-	if err := o.OpenURL(authURL); err != nil {
-		return nil, fmt.Errorf("login: open browser: %w", err)
+	if err := o.OpenURL(authURL); err != nil && o.Notify != nil {
+		// The URL is already on screen. A machine without a browser
+		// (a server over SSH) completes the login by hand.
+		fmt.Fprintf(o.Notify, "Could not open a browser (%v). Open the URL above yourself.\n", err)
 	}
 
 	var res callbackResult
