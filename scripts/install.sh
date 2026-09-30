@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build the binary into ~/.local/bin and print the one-time Claude Code
-# registration command.
+# Build the binary into ~/.local/bin and, when run from a terminal, start
+# the setup wizard.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p "$HOME/.local/bin"

@@ -57,7 +57,8 @@ publish the consent screen, create a Desktop app client and download its
 JSON), picks the downloaded file up from `~/Downloads` by itself, then logs
 your accounts in and proposes an alias and a sentence for each one. Enter
 accepts a proposal. On a Linux machine without a keyring it asks once
-whether tokens may go to a private file.
+whether tokens may go to a private file. Running `minuar-multi-gmail` with no
+arguments in a terminal also starts the wizard.
 
 When it ends, restart Claude Code and ask it something about your mail. Run
 `minuar-multi-gmail wizard` again at any time: every step skips what is
@@ -139,7 +140,7 @@ so you can always tell which mailbox Claude touched.
 |--------|--------------|-------|
 | macOS | Keychain, through the `security` command. | `open` starts the browser. |
 | Linux desktop | Secret Service (GNOME Keyring, KWallet) through `secret-tool`. Install `libsecret-tools` (Debian, Ubuntu) or `libsecret` (Fedora, Arch). | `xdg-open` starts the browser. |
-| Linux server | No keyring answers, so `setup` offers `secrets.json` in the config directory, mode 0600. Accept it with `MINUAR_MULTI_GMAIL_SECRETS=file` on the `setup` call. | No browser. `add-account` prints the login URL and the port it listens on. Either forward that port from your own machine (`ssh -L <port>:127.0.0.1:<port> <server>`) and open the URL there, or open the URL anywhere, let the final redirect to 127.0.0.1 fail, and run `curl` with that failed address on the server. |
+| Linux server | No keyring answers, so `setup` offers `secrets.json` in the config directory, mode 0600. Accept it with `MINUAR_MULTI_GMAIL_SECRETS=file` on the `setup` call. The wizard asks the same question with a y/N prompt instead. | No browser. `add-account` prints the login URL and the port it listens on. Either forward that port from your own machine (`ssh -L <port>:127.0.0.1:<port> <server>`) and open the URL there, or open the URL anywhere, let the final redirect to 127.0.0.1 fail, and run `curl` with that failed address on the server. |
 | Windows | Compiles and uses `secrets.json`. Not tested. | `rundll32` starts the browser. |
 
 `setup` probes the system once, says which store it chose and why, and
