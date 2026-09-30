@@ -221,3 +221,25 @@ func TestLoginContinuesWhenBrowserCannotOpen(t *testing.T) {
 		t.Fatalf("notify = %q", notes.String())
 	}
 }
+
+// The user on a server needs the port to forward, so Login prints it.
+func TestLoginNotifiesThePortForSSHForwarding(t *testing.T) {
+	g := newFakeGoogle(t, "rt")
+	var saw url.Values
+	var notes strings.Builder
+	if _, err := Login(context.Background(), LoginOptions{
+		Creds: ClientCreds{ID: "id", Secret: "sec"}, OpenURL: browser(t, "", &saw),
+		Endpoint: g.endpoint(), Timeout: 5 * time.Second, Notify: &notes,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	redirect, err := url.Parse(saw.Get("redirect_uri"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := redirect.Port()
+	want := "ssh -L " + port + ":127.0.0.1:" + port
+	if port == "" || !strings.Contains(notes.String(), want) {
+		t.Fatalf("notify lacks %q: %q", want, notes.String())
+	}
+}

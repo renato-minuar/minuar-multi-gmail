@@ -99,6 +99,8 @@ func Login(ctx context.Context, o LoginOptions) (*oauth2.Token, error) {
 
 	if o.Notify != nil {
 		fmt.Fprintf(o.Notify, "Opening your browser. If it does not open, visit:\n%s\n", authURL)
+		port := ln.Addr().(*net.TCPAddr).Port
+		fmt.Fprintf(o.Notify, "Waiting for Google on 127.0.0.1:%d. From another machine: ssh -L %d:127.0.0.1:%d <this server>, then open the URL there.\n", port, port, port)
 	}
 	if err := o.OpenURL(authURL); err != nil && o.Notify != nil {
 		// The URL is already on screen. A machine without a browser
