@@ -466,7 +466,7 @@ func TestRunDoctor(t *testing.T) {
 	if ok {
 		t.Fatal("doctor must fail when one account has no token")
 	}
-	if !strings.HasPrefix(out.String(), "ok   secrets        file") {
+	if !strings.HasPrefix(out.String(), "ok   secrets        file ") {
 		t.Fatalf("doctor must name the store first: %q", out.String())
 	}
 	s := out.String()
@@ -657,5 +657,76 @@ func TestCommandsRegistered(t *testing.T) {
 		if _, ok := commandHelp[name]; !ok {
 			t.Errorf("command %q has no help line", name)
 		}
+	}
+}
+
+func TestRunSetupRecordedFileStoreCountsAsAccepted(t *testing.T) {
+	dir := t.TempDir()
+	if err := config.Save(dir, &config.File{Version: 1, Secrets: "file"}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "client_secret_x.json")
+	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
+	d := setupWith(t, dir, "linux", "", secrets.KindFile, "No keyring found.", secrets.NewMem())
+	if err := runSetup(d, path, &bytes.Buffer{}); err != nil {
+		t.Fatalf("a recorded file store was accepted once: %v", err)
+	}
+}
+
+func TestRunSetupWarnsWhenTheStoreChanges(t *testing.T) {
+	dir := t.TempDir()
+	if err := config.Save(dir, &config.File{Version: 1, Default: "work", Secrets: "file",
+		Accounts: []config.Account{{Alias: "work", Email: "you@company.example", AddedAt: fixedNow()}}}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "client_secret_x.json")
+	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
+	var out bytes.Buffer
+	d := setupWith(t, dir, "linux", "", secrets.KindSecretService, "Secrets go to the Secret Service.", secrets.NewMem())
+	if err := runSetup(d, path, &out); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"The secret store changes from file to secret-service",
+		"add-account work --replace",
+		"Then delete " + filepath.Join(dir, secrets.FileName) + "; it still holds their old tokens.",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("out lacks %q: %q", want, out.String())
+		}
+	}
+}
+
+func TestRunSetupNoWarningWhenTheStoreStaysTheSame(t *testing.T) {
+	dir := t.TempDir()
+	if err := config.Save(dir, &config.File{Version: 1, Default: "work",
+		Accounts: []config.Account{{Alias: "work", Email: "you@company.example", AddedAt: fixedNow()}}}); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "client_secret_x.json")
+	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
+	var out bytes.Buffer
+	// Nothing recorded on darwin means the Keychain, so keychain again is no change.
+	d := setupWith(t, dir, "darwin", "", secrets.KindKeychain, "Secrets go to the macOS Keychain.", secrets.NewMem())
+	if err := runSetup(d, path, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "changes from") {
+		t.Fatalf("unexpected warning: %q", out.String())
+	}
+}
+
+func TestRunSetupCorruptConfigFailsBeforeTheStoreIsTouched(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, config.FileName), []byte("{not json"), 0o600)
+	path := filepath.Join(dir, "client_secret_x.json")
+	os.WriteFile(path, []byte(sampleClientSecret), 0o600)
+	st := secrets.NewMem()
+	d := setupWith(t, dir, "darwin", "", secrets.KindKeychain, "Secrets go to the macOS Keychain.", st)
+	if err := runSetup(d, path, &bytes.Buffer{}); err == nil {
+		t.Fatal("corrupt accounts.json accepted")
+	}
+	if _, err := st.Get(secrets.ClientIDKey); !errors.Is(err, secrets.ErrNotFound) {
+		t.Fatal("the store must stay empty when accounts.json is corrupt")
 	}
 }

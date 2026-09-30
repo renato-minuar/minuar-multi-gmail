@@ -59,7 +59,7 @@ func runDoctor(ctx context.Context, d doctorDeps) bool {
 		}
 		fmt.Fprintf(d.out, "%s %-14s %s\n", status, what, detail)
 	}
-	report(true, "secrets", string(d.storeKind))
+	report(true, "secrets", d.storeKind.Describe(d.configDir))
 	creds, err := googleauth.LoadClientCreds(d.store)
 	if err != nil {
 		report(false, "oauth-client", err.Error())

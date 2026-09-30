@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/renato-minuar/minuar-multi-gmail/internal/config"
@@ -67,13 +68,32 @@ func runSetup(d setupDeps, path string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	cfg, err := config.Load(d.configDir)
+	if err != nil {
+		return err
+	}
 	kind, why := d.detect(secrets.ServiceName())
 	if kind == "" {
 		return errors.New(why)
 	}
 	fmt.Fprintln(out, why)
-	if kind == secrets.KindFile && d.goos != "windows" && d.envKind == "" {
+	// A recorded file store means the user accepted it on an earlier run.
+	accepted := d.envKind != "" || cfg.Secrets == string(secrets.KindFile)
+	if kind == secrets.KindFile && d.goos != "windows" && !accepted {
 		return errFileStoreNotAccepted
+	}
+	oldKind := cfg.Secrets
+	if oldKind == "" && d.goos == "darwin" {
+		oldKind = string(secrets.KindKeychain)
+	}
+	if oldKind != "" && oldKind != string(kind) && len(cfg.Accounts) > 0 {
+		fmt.Fprintf(out, "The secret store changes from %s to %s. These accounts need a new login:\n", oldKind, kind)
+		for _, a := range cfg.Accounts {
+			fmt.Fprintf(out, "  minuar-multi-gmail add-account %s --replace\n", a.Alias)
+		}
+		if oldKind == string(secrets.KindFile) {
+			fmt.Fprintf(out, "Then delete %s; it still holds their old tokens.\n", filepath.Join(d.configDir, secrets.FileName))
+		}
 	}
 	store, err := d.open(kind)
 	if err != nil {
@@ -82,13 +102,9 @@ func runSetup(d setupDeps, path string, out io.Writer) error {
 	if err := googleauth.SaveClientCreds(store, creds); err != nil {
 		return fmt.Errorf("store in %s: %w", kind.Describe(d.configDir), err)
 	}
-	cfg, err := config.Load(d.configDir)
-	if err != nil {
-		return err
-	}
 	cfg.Secrets = string(kind)
 	if err := config.Save(d.configDir, cfg); err != nil {
-		return fmt.Errorf("record the secret store: %w", err)
+		return fmt.Errorf("credentials are stored in %s but not recorded in accounts.json: %w; fix the file and run setup again", kind.Describe(d.configDir), err)
 	}
 	fmt.Fprintf(out, "Stored OAuth client %s in the %s.\nDelete the downloaded file now:\n  rm %s\nNext: minuar-multi-gmail add-account <alias>\n",
 		creds.ID, kind.Describe(d.configDir), path)
