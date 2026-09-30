@@ -29,7 +29,7 @@ func flowDeps(t *testing.T, input string, st secrets.Store, emails ...string) (*
 		detect:   func(string) (secrets.Kind, string) { return secrets.KindKeychain, "Secrets go to the macOS Keychain." },
 		open:     func(secrets.Kind) (secrets.Store, error) { return st, nil },
 		lookPath: func(string) (string, error) { return "/usr/local/bin/claude", nil },
-		run:      func(string, ...string) (string, error) { return "", nil },
+		run:      func(context.Context, string, ...string) (string, error) { return "", nil },
 		openURL:  func(string) error { return nil },
 		login: func(context.Context, googleauth.ClientCreds) (*oauth2.Token, error) {
 			return &oauth2.Token{AccessToken: "at", RefreshToken: "rt-" + strings.ReplaceAll(emails[i], "@", "~")}, nil
@@ -222,7 +222,7 @@ func TestRunWizardLinuxRefusalWritesNothing(t *testing.T) {
 		return secrets.KindFile, "No keyring found: secret-tool is not installed."
 	}
 	runs := 0
-	d.run = func(string, ...string) (string, error) { runs++; return "", nil }
+	d.run = func(context.Context, string, ...string) (string, error) { runs++; return "", nil }
 	err := runWizard(context.Background(), d)
 	if !errors.Is(err, errStoreRefused) {
 		t.Fatalf("err = %v", err)

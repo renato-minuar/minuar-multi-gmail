@@ -42,7 +42,7 @@ type wizardDeps struct {
 	lookPath func(file string) (string, error)
 	// run executes a command and returns its combined output; a non-zero
 	// exit is the error.
-	run     func(name string, args ...string) (string, error)
+	run     func(ctx context.Context, name string, args ...string) (string, error)
 	openURL func(url string) error
 
 	login         func(ctx context.Context, creds googleauth.ClientCreds) (*oauth2.Token, error)
@@ -169,8 +169,8 @@ func productionWizardDeps(io stdio) (*wizardDeps, error) {
 			return secrets.Open(kind, secrets.ServiceName(), dir)
 		},
 		lookPath: exec.LookPath,
-		run: func(name string, args ...string) (string, error) {
-			b, err := exec.Command(name, args...).CombinedOutput()
+		run: func(ctx context.Context, name string, args ...string) (string, error) {
+			b, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
 			return string(b), err
 		},
 		openURL: openBrowser,
@@ -192,18 +192,15 @@ func productionWizardDeps(io stdio) (*wizardDeps, error) {
 func runWizard(ctx context.Context, d *wizardDeps) error {
 	heading(d, "Setup wizard")
 	fmt.Fprintln(d.out, "Enter accepts the value in brackets. Every step skips what is already done.")
-	kind, accepted, err := wizardStore(d)
+	kind, err := wizardStore(d)
 	if err != nil {
 		return err
-	}
-	if !accepted {
-		return errStoreRefused
 	}
 	store, err := d.open(kind)
 	if err != nil {
 		return err
 	}
-	wizardClaude(d)
+	wizardClaude(ctx, d)
 	if err := wizardClient(ctx, d, kind, store); err != nil {
 		return err
 	}
