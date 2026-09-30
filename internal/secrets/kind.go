@@ -3,6 +3,7 @@ package secrets
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -70,8 +71,10 @@ func defaultDetectDeps() detectDeps {
 	return detectDeps{goos: runtime.GOOS, getenv: os.Getenv, lookPath: exec.LookPath, probe: probeSecretTool}
 }
 
-// probeSecretTool writes, reads and clears a throwaway item so the choice
-// rests on a working keyring, not on the command being installed.
+// probeSecretTool writes, reads back and clears a throwaway item so the
+// choice rests on a working keyring, not on the command being installed.
+// When the write works but the clear fails, a probe item may stay in the
+// keyring; the error names it.
 func probeSecretTool(service string) error {
 	b := make([]byte, 8)
 	if _, err := rand.Read(b); err != nil {
@@ -82,7 +85,17 @@ func probeSecretTool(service string) error {
 	if err := st.Set(name, "probe"); err != nil {
 		return err
 	}
-	return st.Delete(name)
+	got, err := st.Get(name)
+	if err != nil {
+		return fmt.Errorf("read back probe item %s: %w", name, err)
+	}
+	if got != "probe" {
+		return errors.New("read back probe item " + name + ": stored value differs")
+	}
+	if err := st.Delete(name); err != nil {
+		return fmt.Errorf("the keyring accepted the write but could not clear the probe item %s: %w", name, err)
+	}
+	return nil
 }
 
 const installHint = "Install secret-tool (package libsecret-tools on Debian and Ubuntu, libsecret on Fedora and Arch) and log in to a desktop session for a keyring."

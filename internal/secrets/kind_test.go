@@ -75,6 +75,14 @@ func TestDetectPerSystem(t *testing.T) {
 	}
 }
 
+func TestDetectNamesLeftoverProbeItem(t *testing.T) {
+	probeErr := errors.New("the keyring accepted the write but could not clear the probe item probe-abc: boom")
+	k, why := detect("svc", fixedDeps("linux", nil, map[string]bool{"secret-tool": true}, probeErr))
+	if k != KindFile || !strings.Contains(why, "could not clear the probe item probe-abc") || !strings.Contains(why, "libsecret-tools") {
+		t.Fatalf("leftover probe item: %q, %q", k, why)
+	}
+}
+
 func TestOpenOn(t *testing.T) {
 	dir := "/tmp/cfg"
 	if s, err := OpenOn(KindKeychain, "svc", dir, "darwin"); err != nil || s == nil {
