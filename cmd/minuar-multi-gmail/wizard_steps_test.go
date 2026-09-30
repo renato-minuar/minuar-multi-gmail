@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -189,6 +190,8 @@ func fakeClock(start time.Time) (now func() time.Time, sleep func(time.Duration)
 	}
 	now = func() time.Time { return t }
 	sleep = func(d time.Duration) {
+		runtime.Gosched()
+		time.Sleep(time.Millisecond) // let the stdin goroutine deliver its line
 		t = t.Add(d)
 		for i := 0; i < len(jobs); i++ {
 			if !jobs[i].at.After(t) {
@@ -251,7 +254,7 @@ func TestWatchDownloadsEmptyLineKeepsWaiting(t *testing.T) {
 	now, sleep, after := fakeClock(start)
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
 	s.d.in = strings.NewReader("\n")
-	after(2*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
+	after(30*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
 	got, err := watchDownloads(s.d, start)
 	if err != nil || filepath.Base(got) != "client_secret_new.json" {
 		t.Fatalf("got %q, %v", got, err)
@@ -375,7 +378,7 @@ func TestWatchDownloadsIgnoresALineThatIsNotAFile(t *testing.T) {
 	start := time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC)
 	now, sleep, after := fakeClock(start)
 	s.d.now, s.d.sleep, s.d.waitFile = now, sleep, time.Minute
-	after(2*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
+	after(30*time.Second, func() { writeClientFile(t, s.d.downloads, "client_secret_new.json", now().Add(time.Second)) })
 	got, err := watchDownloads(s.d, start)
 	if err != nil || filepath.Base(got) != "client_secret_new.json" {
 		t.Fatalf("got %q, %v", got, err)
