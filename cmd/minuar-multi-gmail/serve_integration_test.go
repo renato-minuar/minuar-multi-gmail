@@ -232,3 +232,57 @@ func TestServeOverStdio(t *testing.T) {
 		t.Fatalf("startup log line missing on stderr:\n%s", stderr.String())
 	}
 }
+
+// A store that cannot be opened must not stop the server: it starts, lists
+// every tool, and reports the problem when a tool needs the store.
+func TestServeWithAnUnopenableStore(t *testing.T) {
+	bin := buildBinary(t)
+	cfgDir := t.TempDir()
+	cfg := &config.File{Version: 1}
+	if err := cfg.Add(config.Account{Alias: "work", Email: "control@example.com", AddedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := config.Save(cfgDir, cfg); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.Command(bin, "serve")
+	cmd.Env = append(os.Environ(), config.EnvDir+"="+cfgDir, envAttachmentDir+"="+t.TempDir(), secrets.EnvKind+"=bogus")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	client := mcp.NewClient(&mcp.Implementation{Name: "minuar-multi-gmail-test", Version: "0"}, nil)
+	session, err := client.Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
+	if err != nil {
+		t.Fatalf("connect: %v\nstderr:\n%s", err, stderr.String())
+	}
+	defer session.Close()
+
+	list, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, tool := range list.Tools {
+		got = append(got, tool.Name)
+	}
+	want := append([]string{}, tools.ToolNames...)
+	sort.Strings(got)
+	sort.Strings(want)
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("tools = %v, want %v", got, want)
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "search_threads", Arguments: map[string]any{"query": "x"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError || !strings.Contains(res.Content[0].(*mcp.TextContent).Text, "unknown secret store") {
+		t.Fatalf("search_threads with an unknown store: %+v", res.Content)
+	}
+
+	// Close before reading stderr, as TestServeOverStdio does.
+	if err := session.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
