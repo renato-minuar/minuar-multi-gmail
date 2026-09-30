@@ -11,11 +11,11 @@ func TestProposeAlias(t *testing.T) {
 	}{
 		{"ann@gmail.com", nil, "personal"},
 		{"Ann@GoogleMail.com", nil, "personal"},
-		{"ann@minuar.com", nil, "work"},
-		{"ann@minuar.com", map[string]bool{"work": true}, "minuar"},
+		{"ann@company.example", nil, "work"},
+		{"ann@company.example", map[string]bool{"work": true}, "company"},
 		{"ann@mail.example.co.uk", map[string]bool{"work": true}, "example"},
-		{"ann@minuar.com", map[string]bool{"work": true, "minuar": true}, "minuar2"},
-		{"ann@minuar.com", map[string]bool{"work": true, "minuar": true, "minuar2": true}, "minuar3"},
+		{"ann@company.example", map[string]bool{"work": true, "company": true}, "company2"},
+		{"ann@company.example", map[string]bool{"work": true, "company": true, "company2": true}, "company3"},
 		{"ann@gmail.com", map[string]bool{"personal": true}, "personal2"},
 		{"ann@my-shop.example", map[string]bool{"work": true}, "my-shop"},
 		{"ann@123.example", map[string]bool{"work": true}, "a123"},
@@ -35,8 +35,8 @@ func TestProposeAlias(t *testing.T) {
 func TestProposeDescription(t *testing.T) {
 	cases := []struct{ alias, email, want string }{
 		{"personal", "ann@gmail.com", "my personal gmail; use it when I say personal or private"},
-		{"work", "ann@minuar.com", "the mailbox at minuar.com; use it by default and for anything about work"},
-		{"minuar", "ann@minuar.com", "the mailbox at minuar.com; use it when I mention minuar"},
+		{"work", "ann@company.example", "the mailbox at company.example; use it by default and for anything about work"},
+		{"company", "ann@company.example", "the mailbox at company.example; use it when I mention company"},
 		{"house", "ann@gmail.com", "the mailbox at gmail.com; use it when I mention house"},
 	}
 	for _, c := range cases {
@@ -47,10 +47,10 @@ func TestProposeDescription(t *testing.T) {
 }
 
 func TestEmailDomainAndLabel(t *testing.T) {
-	if emailDomain("Ann@Minuar.COM") != "minuar.com" || emailDomain("nonsense") != "" {
+	if emailDomain("Ann@Company.EXAMPLE") != "company.example" || emailDomain("nonsense") != "" {
 		t.Fatal("emailDomain")
 	}
-	for domain, want := range map[string]string{"minuar.com": "minuar", "mail.example.co.uk": "example", "gmail.com": "gmail", "localhost": "localhost", "": ""} {
+	for domain, want := range map[string]string{"company.example": "company", "mail.example.co.uk": "example", "gmail.com": "gmail", "localhost": "localhost", "": ""} {
 		if got := domainLabel(domain); got != want {
 			t.Errorf("domainLabel(%q) = %q, want %q", domain, got, want)
 		}
