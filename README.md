@@ -13,9 +13,9 @@ Once it is set up you can say things like:
   nothing goes out until you ask.
 - "Archive everything from that newsletter" or "mark the thread read".
 
-It runs on your Mac, talks only to Google, and keeps every secret in the
-macOS Keychain. Nothing is hosted anywhere and no credentials ship with the
-code.
+It runs on your own machine (macOS or Linux), talks only to Google, and keeps
+every secret in the system's keyring. Nothing is hosted anywhere and no
+credentials ship with the code.
 
 ## How it keeps you safe
 
@@ -29,12 +29,16 @@ code.
 - Attachments are saved only for a fixed list of file types, under
   `~/Library/Caches/minuar-multi-gmail/attachments`, in a directory only
   you can read. The name a sender gave a file cannot move it anywhere else.
-- Tokens and the OAuth client live in the Keychain. The config file holds
-  only aliases, addresses and the sentences you wrote.
+- Tokens and the OAuth client live in the macOS Keychain or the Linux Secret
+  Service. On a machine without a keyring, `setup` offers a file store and
+  stores nothing until you accept it with `MINUAR_MULTI_GMAIL_SECRETS=file`;
+  that file is readable by anyone with your user account or root. The config
+  file holds only aliases, addresses, the sentences you wrote, and which
+  store is in use.
 
 ## Quick start
 
-You need macOS, Go 1.26 and about fifteen minutes, most of it in the Google
+You need macOS or Linux, Go 1.26 and about fifteen minutes, most of it in the Google
 Cloud console.
 
 **1. Get an OAuth client from Google.** In the Google Cloud console create a
@@ -52,7 +56,8 @@ every click.
 
     minuar-multi-gmail setup ~/Downloads/client_secret_1234.json
 
-Then delete the downloaded file; the Keychain has it now.
+Then delete the downloaded file; the secret store has it now. `setup` prints
+which store it chose and why.
 
 **4. Add your first account.**
 
@@ -87,14 +92,15 @@ house, the lease or the landlord`.
 | `minuar-multi-gmail set-description personal "…"` | Change the sentence for an account. `--clear` removes it. Restart Claude Code afterwards. |
 | `minuar-multi-gmail set-default personal` | Change the default account. |
 | `minuar-multi-gmail add-account work --replace` | Log an account in again, for example after Google asks for a fresh consent. Keeps the description. |
-| `minuar-multi-gmail remove-account shop` | Revoke the token at Google, delete it from the Keychain, forget the alias. |
-| `minuar-multi-gmail doctor` | Check the Keychain, the config and every token in one go. |
+| `minuar-multi-gmail remove-account shop` | Revoke the token at Google, delete it from the secret store, forget the alias. |
+| `minuar-multi-gmail doctor` | Check the secret store, the config and every token in one go. |
 
 Less common: `setup <client_secret.json>` (step 3 above), `version`, and
 `serve`, which Claude Code runs for you.
 
 The config file is `~/.config/minuar-multi-gmail/accounts.json`. Keychain
-items sit under the service `com.minuar.multi-gmail`.
+items sit under the service `com.minuar.multi-gmail`. `secrets.json` next to
+it exists only with the file store.
 
 ## What Claude can do with it
 
@@ -107,7 +113,7 @@ so you can always tell which mailbox Claude touched.
 | `accounts_list` | Lists the aliases, addresses and the default. |
 | `search_threads` | Searches with the same syntax as the Gmail search box: `from:`, `newer_than:7d`, `has:attachment`, `label:`, and so on. |
 | `get_thread`, `get_message` | Read mail as plain text, with attachment names. |
-| `get_attachment` | Saves the attachments of a message to files on your Mac so Claude can open them. Only file types Claude can read are saved: PDF, images, text, and Word, Excel and PowerPoint files. |
+| `get_attachment` | Saves the attachments of a message to files on your machine so Claude can open them. Only file types Claude can read are saved: PDF, images, text, and Word, Excel and PowerPoint files. |
 | `list_labels`, `modify_labels` | See and change labels. Removing `UNREAD` marks read, removing `INBOX` archives. Labels are never created. |
 | `create_draft` | Write a new mail or a reply as a draft. Never sends. |
 | `send_draft` | Send an existing draft. Asks you first. |
@@ -130,12 +136,19 @@ so you can always tell which mailbox Claude touched.
   not published, or a Workspace admin has to allow the app. Both are fixed
   in the Google Cloud console, not here.
 
-## Why macOS only
+## Systems
 
-Two things: secrets are stored through the macOS `security` command, and
-the login step opens the browser with `open`. Everything else is plain Go.
-A second secrets backend behind the existing `Store` interface would make
-it run on Linux.
+| System | Secret store | Login |
+|--------|--------------|-------|
+| macOS | Keychain, through the `security` command. | `open` starts the browser. |
+| Linux desktop | Secret Service (GNOME Keyring, KWallet) through `secret-tool`. Install `libsecret-tools` (Debian, Ubuntu) or `libsecret` (Fedora, Arch). | `xdg-open` starts the browser. |
+| Linux server | No keyring answers, so `setup` offers `secrets.json` in the config directory, mode 0600. Accept it with `MINUAR_MULTI_GMAIL_SECRETS=file` on the `setup` call. | No browser: `add-account` prints the login URL; open it from another machine with an SSH port forward to the port it names. |
+| Windows | Compiles and uses `secrets.json`. Not tested. | `rundll32` starts the browser. |
+
+`setup` probes the system once, says which store it chose and why, and
+records the choice in `accounts.json`. Every later command uses that store
+and reports when it cannot reach it. `MINUAR_MULTI_GMAIL_SECRETS` forces a
+store for every command.
 
 ## For developers
 

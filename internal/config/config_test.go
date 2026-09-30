@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,9 @@ func TestLoadMissingFileGivesEmpty(t *testing.T) {
 }
 
 func TestSaveLoadRoundTripAndPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes are Unix only")
+	}
 	dir := filepath.Join(t.TempDir(), "cfg")
 	f := &File{Version: 1}
 	if err := f.Add(acct("work", "control@example.com")); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -61,13 +62,15 @@ func TestGetAttachmentSavesTheNamedFile(t *testing.T) {
 	if err != nil || string(data) != "%PDF-1.4 fake" {
 		t.Fatalf("file content = %q err %v", data, err)
 	}
-	info, err := os.Stat(f.Path)
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("file mode = %v err %v", info.Mode().Perm(), err)
-	}
-	dirInfo, err := os.Stat(filepath.Dir(f.Path))
-	if err != nil || dirInfo.Mode().Perm() != 0o700 {
-		t.Fatalf("dir mode = %v err %v", dirInfo.Mode().Perm(), err)
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(f.Path)
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("file mode = %v err %v", info.Mode().Perm(), err)
+		}
+		dirInfo, err := os.Stat(filepath.Dir(f.Path))
+		if err != nil || dirInfo.Mode().Perm() != 0o700 {
+			t.Fatalf("dir mode = %v err %v", dirInfo.Mode().Perm(), err)
+		}
 	}
 	if strings.Contains(strings.Join(e.work.calls, ","), "att:att-png") {
 		t.Fatalf("calls = %v: the other attachment must not be downloaded", e.work.calls)

@@ -24,7 +24,7 @@ var allowedAttachmentTypes = []string{
 }
 
 // maxAttachmentNameRunes caps the saved name without its extension, well
-// under the 255 byte limit of a file name on macOS.
+// under the 255 byte file name limit of the common file systems.
 const maxAttachmentNameRunes = 150
 
 // messageIDRe is the shape of a Gmail message id. The id becomes a
@@ -72,7 +72,8 @@ func safeAttachmentName(name string) string {
 
 // savedNames gives every attachment of a message its file name, in message
 // order. Names that collide, compared without case because the default
-// macOS file system ignores it, get a number before the extension. The
+// macOS and Windows file systems ignore it, get a number before the
+// extension. The
 // result depends only on the message, so a repeated call writes the same
 // paths.
 func savedNames(atts []gmail.Attachment) []string {
