@@ -158,3 +158,7 @@ The design specs live in `docs/superpowers/specs/`. Rebuild with
 its next session start.
 
 MIT licensed.
+
+## Known bugs
+
+See [docs/BUGS.md](docs/BUGS.md).
