@@ -103,13 +103,8 @@ func Build(m Message) ([]byte, error) {
 			return nil, err
 		}
 	}
-	for i, a := range m.Attachments {
-		if strings.TrimSpace(a.Filename) == "" {
-			return nil, fmt.Errorf("attachment %d has no filename", i+1)
-		}
-		if a.Data == nil {
-			return nil, fmt.Errorf("attachment %q has no data", a.Filename)
-		}
+	if err := checkAttachments(m.Attachments); err != nil {
+		return nil, err
 	}
 	date := m.Date
 	if date.IsZero() {
@@ -157,47 +152,79 @@ func Build(m Message) ([]byte, error) {
 	}
 	writeBase64(text, []byte(m.BodyText))
 	for _, a := range m.Attachments {
-		ct := a.ContentType
-		if ct == "" {
-			ct = "application/octet-stream"
-		}
-		ctHeader := stdmime.FormatMediaType(ct, map[string]string{"name": a.Filename})
-		disp := stdmime.FormatMediaType("attachment", map[string]string{"filename": a.Filename})
-		if ctHeader == "" || disp == "" {
-			return nil, fmt.Errorf("attachment %q: cannot encode content type %q", a.Filename, ct)
-		}
-		// RFC 2046 section 5.2.1 allows only 7bit, 8bit or binary on a
-		// message/rfc822 body. Gmail decodes base64 there anyway, Outlook
-		// shows such a part as empty, so the message travels verbatim.
-		enc := "base64"
-		if strings.EqualFold(ct, "message/rfc822") {
-			enc = "8bit"
-		}
-		part, err := mw.CreatePart(textproto.MIMEHeader{
-			"Content-Type":              {ctHeader},
-			"Content-Disposition":       {disp},
-			"Content-Transfer-Encoding": {enc},
-		})
+		header, enc, err := attachmentHeader(a)
 		if err != nil {
 			return nil, err
 		}
-		if enc == "8bit" {
-			if _, err := part.Write(a.Data); err != nil {
-				return nil, err
-			}
-			if !bytes.HasSuffix(a.Data, []byte("\r\n")) {
-				if _, err := io.WriteString(part, "\r\n"); err != nil {
-					return nil, err
-				}
-			}
-			continue
+		part, err := mw.CreatePart(header)
+		if err != nil {
+			return nil, err
 		}
-		writeBase64(part, a.Data)
+		if err := writeAttachmentBody(part, a, enc); err != nil {
+			return nil, err
+		}
 	}
 	if err := mw.Close(); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
+}
+
+// checkAttachments refuses an attachment without a filename or without data.
+func checkAttachments(atts []Attachment) error {
+	for i, a := range atts {
+		if strings.TrimSpace(a.Filename) == "" {
+			return fmt.Errorf("attachment %d has no filename", i+1)
+		}
+		if a.Data == nil {
+			return fmt.Errorf("attachment %q has no data", a.Filename)
+		}
+	}
+	return nil
+}
+
+// attachmentHeader returns the MIME header of an attachment part and its
+// transfer encoding. A non-ASCII filename takes the RFC 2231 form.
+func attachmentHeader(a Attachment) (textproto.MIMEHeader, string, error) {
+	ct := a.ContentType
+	if ct == "" {
+		ct = "application/octet-stream"
+	}
+	ctHeader := stdmime.FormatMediaType(ct, map[string]string{"name": a.Filename})
+	disp := stdmime.FormatMediaType("attachment", map[string]string{"filename": a.Filename})
+	if ctHeader == "" || disp == "" {
+		return nil, "", fmt.Errorf("attachment %q: cannot encode content type %q", a.Filename, ct)
+	}
+	// RFC 2046 section 5.2.1 allows only 7bit, 8bit or binary on a
+	// message/rfc822 body. Gmail decodes base64 there anyway, Outlook
+	// shows such a part as empty, so the message travels verbatim.
+	enc := "base64"
+	if strings.EqualFold(ct, "message/rfc822") {
+		enc = "8bit"
+	}
+	return textproto.MIMEHeader{
+		"Content-Type":              {ctHeader},
+		"Content-Disposition":       {disp},
+		"Content-Transfer-Encoding": {enc},
+	}, enc, nil
+}
+
+// writeAttachmentBody writes the attachment bytes in the encoding
+// attachmentHeader chose. The body always ends with CRLF.
+func writeAttachmentBody(w io.Writer, a Attachment, enc string) error {
+	if enc != "8bit" {
+		writeBase64(w, a.Data)
+		return nil
+	}
+	if _, err := w.Write(a.Data); err != nil {
+		return err
+	}
+	if !bytes.HasSuffix(a.Data, []byte("\r\n")) {
+		if _, err := io.WriteString(w, "\r\n"); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // writeBase64 writes data base64 encoded in 76-column CRLF lines, with a

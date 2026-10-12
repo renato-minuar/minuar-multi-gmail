@@ -11,6 +11,8 @@ Once it is set up you can say things like:
   them, shows you the list, and sends after you say yes.
 - "Draft a reply to Ann saying Thursday works." A draft appears in Gmail;
   nothing goes out until you ask.
+- "Attach the invoice PDF to the reply I just wrote." Claude adds the file
+  to your draft and leaves every word of it alone.
 - "What is the total on the invoice attached to that mail?" Claude saves the
   PDF to a private folder on your machine and reads it.
 - "Archive everything from that newsletter" or "mark the thread read".
@@ -29,6 +31,9 @@ credentials ship with the code.
 - Replies and new mail are drafts first. You can read them in Gmail before
   they go.
 - There is no permanent delete. Trash is reversible.
+- Files are attached to a draft only from an absolute path you or Claude
+  name, only for the same fixed list of file types, never through a
+  symbolic link, and only while the whole message stays under 25 MB.
 - Attachments are saved only for a fixed list of file types, under
   `~/Library/Caches/minuar-multi-gmail/attachments` on macOS and
   `~/.cache/minuar-multi-gmail/attachments` on Linux (`$XDG_CACHE_HOME` when
@@ -113,7 +118,8 @@ so you can always tell which mailbox Claude touched.
 | `get_thread`, `get_message` | Read mail as plain text, with attachment names. |
 | `get_attachment` | Saves the attachments of a message to files on your machine so Claude can open them. Only file types Claude can read are saved: PDF, images, text, and Word, Excel and PowerPoint files. |
 | `list_labels`, `modify_labels` | See and change labels. Removing `UNREAD` marks read, removing `INBOX` archives. Labels are never created. |
-| `create_draft` | Write a new mail or a reply as a draft. Never sends. |
+| `create_draft` | Write a new mail or a reply as a draft, with files from your machine attached when you ask. Never sends. |
+| `add_draft_attachment` | Attach files from your machine to a draft that exists, also one you wrote in Gmail. The text, the recipients, the thread and earlier attachments stay as they are. Never sends. |
 | `send_draft` | Send an existing draft. Asks you first. |
 | `forward_message` | Forward one message with its attachments. Sends after you approve; `draft_only` keeps a draft; `as_eml` attaches the original as a `.eml` file when you ask for that. |
 | `forward_messages` | Forward several messages to the same people in one call and one approval, with a per-message report. |

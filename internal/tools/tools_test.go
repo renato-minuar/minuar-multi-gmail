@@ -37,6 +37,12 @@ type fakeService struct {
 	uploads      [][]byte          // every CreateDraftUpload body, in order
 	uploadRaw    []byte
 	uploadThread string
+
+	// add_draft_attachment support
+	drafts       map[string]*gmail.DraftRaw // draft id -> stored draft
+	updateID     string                     // draft id of the last UpdateDraftUpload
+	updateRaw    []byte
+	updateThread string
 }
 
 func (f *fakeService) rec(s string)  { f.calls = append(f.calls, s) }
@@ -91,6 +97,28 @@ func (f *fakeService) CreateDraftUpload(_ context.Context, raw []byte, threadID 
 	f.uploads = append(f.uploads, raw)
 	f.uploadRaw, f.uploadThread = raw, threadID
 	return &gmail.DraftResult{DraftID: "d-2", MessageID: "m-10", ThreadID: "t-10"}, nil
+}
+func (f *fakeService) FindDraftID(_ context.Context, messageID string) (string, error) {
+	f.rec("find:" + messageID)
+	for id, d := range f.drafts {
+		if d.MessageID == messageID {
+			return id, nil
+		}
+	}
+	return "", &gmail.NotFoundError{ID: messageID}
+}
+func (f *fakeService) GetDraftRaw(_ context.Context, id string) (*gmail.DraftRaw, error) {
+	f.rec("draftraw:" + id)
+	d, ok := f.drafts[id]
+	if !ok {
+		return nil, &gmail.NotFoundError{ID: id}
+	}
+	return d, nil
+}
+func (f *fakeService) UpdateDraftUpload(_ context.Context, id string, raw []byte, threadID string) (*gmail.DraftResult, error) {
+	f.rec("update:" + id)
+	f.updateID, f.updateRaw, f.updateThread = id, raw, threadID
+	return &gmail.DraftResult{DraftID: id, MessageID: "m-new", ThreadID: threadID}, nil
 }
 func (f *fakeService) GetMessageHeaders(_ context.Context, id string) (*gmail.MessageHeaders, error) {
 	f.rec("headers:" + id)
@@ -264,7 +292,7 @@ func TestAccountDescriptionOnEveryInput(t *testing.T) {
 			t.Fatalf("%T Account tag = %q", in, f.Tag)
 		}
 	}
-	if len(ToolNames) != 14 {
+	if len(ToolNames) != 15 {
 		t.Fatalf("ToolNames = %d", len(ToolNames))
 	}
 }

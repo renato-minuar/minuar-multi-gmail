@@ -24,7 +24,9 @@ const instructionsTail = "Pick the account from the user's wording and never ask
 	"forward_message sends the forward right away and asks the user for approval on every call; set draft_only when the user wants a draft to review. " +
 	"It quotes the original inline with its attachments; set as_eml only when the user asks for eml or to forward as attachment. " +
 	"Use forward_messages when more than one message is to be forwarded: one call, one approval. " +
-	"To read an attachment, call get_attachment and open the file at the returned path."
+	"To read an attachment, call get_attachment and open the file at the returned path. " +
+	"To attach a local file, give its absolute path in create_draft attachments for a new draft, or call add_draft_attachment for a draft that exists. " +
+	"For a draft the user wrote in Gmail, read the thread with get_thread and pass the message_id of the message labelled DRAFT."
 
 // envAttachmentDir overrides where get_attachment writes files.
 const envAttachmentDir = "MINUAR_MULTI_GMAIL_ATTACHMENT_DIR"

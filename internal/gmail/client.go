@@ -363,6 +363,89 @@ func (c *Client) CreateDraftUpload(ctx context.Context, raw []byte, threadID str
 	return draftResult(out), nil
 }
 
+// maxDraftPages bounds the walk FindDraftID makes through the drafts list:
+// 20 pages of 500 drafts.
+const maxDraftPages = 20
+
+// FindDraftID returns the id of the draft whose message is messageID. The
+// read tools return message ids, the draft calls need draft ids, and Gmail
+// has no direct lookup, so the drafts list is walked. No such draft is a
+// NotFoundError.
+func (c *Client) FindDraftID(ctx context.Context, messageID string) (string, error) {
+	pageToken := ""
+	for page := 0; page < maxDraftPages; page++ {
+		var list *gmailapi.ListDraftsResponse
+		err := c.do(ctx, func(ctx context.Context) error {
+			call := c.svc.Users.Drafts.List("me").MaxResults(500)
+			if pageToken != "" {
+				call = call.PageToken(pageToken)
+			}
+			var err error
+			list, err = call.Context(ctx).Do()
+			return err
+		})
+		if err != nil {
+			return "", c.mapErr(err, messageID)
+		}
+		for _, d := range list.Drafts {
+			if d.Message != nil && d.Message.Id == messageID {
+				return d.Id, nil
+			}
+		}
+		if list.NextPageToken == "" {
+			break
+		}
+		pageToken = list.NextPageToken
+	}
+	return "", &NotFoundError{ID: messageID}
+}
+
+// GetDraftRaw fetches a draft with format=raw: the exact bytes of its
+// message, the form UpdateDraftUpload sends back. It runs under the
+// transfer timeout because the draft can carry attachments.
+func (c *Client) GetDraftRaw(ctx context.Context, draftID string) (*DraftRaw, error) {
+	var d *gmailapi.Draft
+	err := c.doTransfer(ctx, func(ctx context.Context) error {
+		var err error
+		d, err = c.svc.Users.Drafts.Get("me", draftID).Format("raw").Context(ctx).Do()
+		return err
+	})
+	if err != nil {
+		return nil, c.mapErr(err, draftID)
+	}
+	if d.Message == nil {
+		return nil, fmt.Errorf("draft %s has no message", draftID)
+	}
+	raw, err := decodeBody(d.Message.Raw)
+	if err != nil {
+		return nil, fmt.Errorf("decode raw draft %s: %w", draftID, err)
+	}
+	return &DraftRaw{DraftID: d.Id, MessageID: d.Message.Id, ThreadID: d.Message.ThreadId, Raw: raw}, nil
+}
+
+// UpdateDraftUpload replaces the message of an existing draft through the
+// media upload path, like CreateDraftUpload. The draft keeps its id and,
+// through threadID, its place in the thread; Gmail gives the message a new
+// id.
+func (c *Client) UpdateDraftUpload(ctx context.Context, draftID string, raw []byte, threadID string) (*DraftResult, error) {
+	draft := &gmailapi.Draft{Message: &gmailapi.Message{ThreadId: threadID}}
+	var out *gmailapi.Draft
+	err := c.doTransfer(ctx, func(ctx context.Context) error {
+		var err error
+		out, err = c.svc.Users.Drafts.Update("me", draftID, draft).
+			Media(bytes.NewReader(raw), googleapi.ContentType("message/rfc822")).
+			Context(ctx).Do()
+		return err
+	})
+	if err != nil {
+		if tooLarge(err) {
+			return nil, &TooLargeError{Bytes: len(raw)}
+		}
+		return nil, c.mapErr(err, draftID)
+	}
+	return draftResult(out), nil
+}
+
 // tooLarge reports a Google rejection of an upload for its size: HTTP 413
 // or an error message containing "too large".
 func tooLarge(err error) bool {

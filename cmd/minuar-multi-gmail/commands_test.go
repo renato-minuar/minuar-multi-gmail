@@ -626,6 +626,7 @@ func TestServerInstructions(t *testing.T) {
 		"Mail is sent by send_draft, forward_message and forward_messages; create_draft never sends.",
 		"Use forward_messages when more than one message is to be forwarded: one call, one approval.",
 		"To read an attachment, call get_attachment and open the file at the returned path.",
+		"or call add_draft_attachment for a draft that exists.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("instructions lack %q: %q", want, got)

@@ -89,7 +89,7 @@ func withAccountDescription[T any](desc string, log *slog.Logger) any {
 
 var ToolNames = []string{
 	"accounts_list", "search_threads", "get_thread", "get_message", "get_attachment", "list_labels", "modify_labels",
-	"create_draft", "forward_message", "forward_messages", "send_draft", "delete_draft", "trash_thread", "untrash_thread",
+	"create_draft", "add_draft_attachment", "forward_message", "forward_messages", "send_draft", "delete_draft", "trash_thread", "untrash_thread",
 }
 
 const (
@@ -168,7 +168,7 @@ func formatDate(t time.Time) string {
 
 func boolPtr(b bool) *bool { return &b }
 
-// Register adds the 14 tools to the server. The account property of every
+// Register adds the 15 tools to the server. The account property of every
 // tool that has one describes the configured accounts, read once here.
 func Register(s *mcp.Server, d Deps) {
 	h := &handlers{d: d}
@@ -189,7 +189,8 @@ func Register(s *mcp.Server, d Deps) {
 	mcp.AddTool(s, &mcp.Tool{Name: "get_attachment", Description: "Save the attachments of a message to local files and return their paths, so the files can be opened and read. Saves one attachment when filename is given, every attachment otherwise. Allowed types: " + allowedTypesText() + ". Other types are skipped and reported. Does not mark the message read.", Annotations: readOnly, InputSchema: withAccountDescription[GetAttachmentInput](account, h.log())}, h.getAttachment)
 	mcp.AddTool(s, &mcp.Tool{Name: "list_labels", Description: "List the account's labels (system and user).", Annotations: readOnly, InputSchema: withAccountDescription[ListLabelsInput](account, h.log())}, h.listLabels)
 	mcp.AddTool(s, &mcp.Tool{Name: "modify_labels", Description: "Add or remove labels on a thread. remove_labels [\"UNREAD\"] marks it read; remove_labels [\"INBOX\"] archives it. Labels are never created.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false), IdempotentHint: true}, InputSchema: withAccountDescription[ModifyLabelsInput](account, h.log())}, h.modifyLabels)
-	mcp.AddTool(s, &mcp.Tool{Name: "create_draft", Description: "Create a draft, new or as a reply. Nothing is sent. From is always the account's own address.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)}, InputSchema: withAccountDescription[CreateDraftInput](account, h.log())}, h.createDraft)
+	mcp.AddTool(s, &mcp.Tool{Name: "create_draft", Description: "Create a draft, new or as a reply. Nothing is sent. From is always the account's own address. attachments adds local files by absolute path.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)}, InputSchema: withAccountDescription[CreateDraftInput](account, h.log())}, h.createDraft)
+	mcp.AddTool(s, &mcp.Tool{Name: "add_draft_attachment", Description: "Attach local files to an existing draft. The draft keeps its text, recipients, thread and the attachments it already has. Nothing is sent. Allowed types: " + allowedTypesText() + ".", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)}, InputSchema: withAccountDescription[AddDraftAttachmentInput](account, h.log())}, h.addDraftAttachment)
 	mcp.AddTool(s, &mcp.Tool{Name: "forward_message", Description: "Forward an existing message with its attachments. Sends by default; draft_only keeps a draft instead. The original is quoted inline by default; as_eml attaches it as a .eml file and is used only when the user asks for that. Every call asks the user for approval.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)}, Meta: mcp.Meta{"anthropic/requiresUserInteraction": true}, InputSchema: withAccountDescription[ForwardMessageInput](account, h.log())}, h.forwardMessage)
 	mcp.AddTool(s, &mcp.Tool{Name: "forward_messages", Description: "Forward several messages to the same recipients in one call under one approval. Use this instead of repeated forward_message calls whenever more than one message is to be forwarded. Sends by default; draft_only keeps drafts. Each item's subject is informational and appears in the approval prompt.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)}, Meta: mcp.Meta{"anthropic/requiresUserInteraction": true}, InputSchema: withAccountDescription[ForwardMessagesInput](account, h.log())}, h.forwardMessages)
 	mcp.AddTool(s, &mcp.Tool{Name: "send_draft", Description: "Send an existing draft. This sends real mail that cannot be recalled.", Annotations: &mcp.ToolAnnotations{DestructiveHint: boolPtr(true)}, Meta: mcp.Meta{"anthropic/requiresUserInteraction": true}, InputSchema: withAccountDescription[SendDraftInput](account, h.log())}, h.sendDraft)

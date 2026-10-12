@@ -49,6 +49,14 @@ type CreateDraftInput struct {
 	BodyText         string   `json:"body_text" jsonschema:"Plain text body"`
 	ReplyToMessageID string   `json:"reply_to_message_id,omitempty" jsonschema:"Message id to reply to. Sets the thread and the In-Reply-To and References headers"`
 	ReplyAll         bool     `json:"reply_all,omitempty" jsonschema:"For replies: also cc the original To and Cc recipients, except this account. Default false"`
+	Attachments      []string `json:"attachments,omitempty" jsonschema:"Absolute paths of local files to attach, for example an invoice PDF. Same file types as get_attachment. The whole message must stay under 25 MB"`
+}
+
+type AddDraftAttachmentInput struct {
+	Account     string   `json:"account,omitempty" jsonschema:"Account alias. Omit for the default account. The server instructions list every alias, its address and when to use it. Never ask the user which one."`
+	DraftID     string   `json:"draft_id,omitempty" jsonschema:"Draft id from create_draft. Give this or message_id; draft_id wins when both are given"`
+	MessageID   string   `json:"message_id,omitempty" jsonschema:"Message id of the draft as get_thread lists it, for a draft the user wrote in Gmail. A draft gets a new message id each time it is saved, so read the thread first"`
+	Attachments []string `json:"attachments" jsonschema:"Absolute paths of local files to attach. Same file types as get_attachment. The whole message must stay under 25 MB"`
 }
 
 type ForwardMessageInput struct {
@@ -219,6 +227,21 @@ type CreateDraftOutput struct {
 	Cc        []string `json:"cc,omitempty"`
 	Bcc       []string `json:"bcc,omitempty"`
 	Subject   string   `json:"subject"`
+	// Attachments lists the local files the draft carries.
+	Attachments []AttachmentOut `json:"attachments,omitempty"`
+}
+
+// AddDraftAttachmentOutput reports the files added. MessageID is the
+// draft's new message id: Gmail replaces the message on every update.
+// SizeBytes is the whole message after the update.
+type AddDraftAttachmentOutput struct {
+	Account     string          `json:"account"`
+	Email       string          `json:"email"`
+	DraftID     string          `json:"draft_id"`
+	MessageID   string          `json:"message_id,omitempty"`
+	ThreadID    string          `json:"thread_id,omitempty"`
+	Attachments []AttachmentOut `json:"attachments"`
+	SizeBytes   int64           `json:"size_bytes"`
 }
 
 type ForwardMessageOutput struct {

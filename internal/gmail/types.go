@@ -91,6 +91,15 @@ type DraftResult struct {
 	ThreadID  string
 }
 
+// DraftRaw is an existing draft as Gmail stores it: Raw holds the exact
+// RFC 5322 bytes of its message.
+type DraftRaw struct {
+	DraftID   string
+	MessageID string
+	ThreadID  string
+	Raw       []byte
+}
+
 type SendResult struct {
 	MessageID string
 	ThreadID  string
@@ -123,6 +132,9 @@ type Service interface {
 	ModifyThreadLabels(ctx context.Context, threadID string, add, remove []string) ([]string, error)
 	CreateDraft(ctx context.Context, raw []byte, threadID string) (*DraftResult, error)
 	CreateDraftUpload(ctx context.Context, raw []byte, threadID string) (*DraftResult, error)
+	FindDraftID(ctx context.Context, messageID string) (string, error)
+	GetDraftRaw(ctx context.Context, draftID string) (*DraftRaw, error)
+	UpdateDraftUpload(ctx context.Context, draftID string, raw []byte, threadID string) (*DraftResult, error)
 	GetAttachment(ctx context.Context, messageID, attachmentID string) ([]byte, error)
 	GetRawMessage(ctx context.Context, messageID string) ([]byte, error)
 	SendDraft(ctx context.Context, draftID string) (*SendResult, error)

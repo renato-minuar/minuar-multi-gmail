@@ -37,6 +37,9 @@ type fakeAPI struct {
 	uploadCalls    atomic.Int32
 	uploadFailN    int32 // first N upload calls answer 503
 	uploadFailCode int   // if non-zero, every upload answers this code
+
+	updatedID      string // draft id of the last update upload
+	draftListCalls atomic.Int32
 }
 
 func apiError(w http.ResponseWriter, code int, reason, msg string) {
@@ -126,38 +129,32 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 		io.WriteString(w, `{"attachmentId":"att-1","size":5,"data":"aGVsbG8"}`)
 	})
 	mux.HandleFunc("POST /upload/gmail/v1/users/me/drafts", func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(f.routeDelay)
-		n := f.uploadCalls.Add(1)
-		if n <= f.uploadFailN {
-			apiError(w, 503, "backendError", "Backend Error")
+		f.handleUpload(w, r, `{"id":"d-2","message":{"id":"m-10","threadId":"t-1"}}`)
+	})
+	mux.HandleFunc("PUT /upload/gmail/v1/users/me/drafts/{id}", func(w http.ResponseWriter, r *http.Request) {
+		f.updatedID = r.PathValue("id")
+		if f.updatedID != "d-1" {
+			apiError(w, 404, "notFound", "Requested entity was not found.")
 			return
 		}
-		if f.uploadFailCode != 0 {
-			apiError(w, f.uploadFailCode, "uploadTooLarge", "Request Entity Too Large")
+		f.handleUpload(w, r, `{"id":"d-1","message":{"id":"m-11","threadId":"t-1"}}`)
+	})
+	mux.HandleFunc("GET /gmail/v1/users/me/drafts", func(w http.ResponseWriter, r *http.Request) {
+		f.draftListCalls.Add(1)
+		q := r.URL.Query()
+		if q.Get("maxResults") != "500" {
+			apiError(w, 400, "badRequest", "unexpected query "+r.URL.RawQuery)
 			return
 		}
-		f.uploadQuery = r.URL.Query().Get("uploadType")
-		_, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
-		if err != nil || params["boundary"] == "" {
-			apiError(w, 400, "badRequest", "not multipart: "+r.Header.Get("Content-Type"))
-			return
+		// Two pages: the draft of message m-9 is on the second one.
+		switch q.Get("pageToken") {
+		case "":
+			io.WriteString(w, `{"drafts":[{"id":"d-0","message":{"id":"m-8","threadId":"t-0"}}],"nextPageToken":"p2"}`)
+		case "p2":
+			io.WriteString(w, `{"drafts":[{"id":"d-1","message":{"id":"m-9","threadId":"t-1"}}]}`)
+		default:
+			apiError(w, 400, "badRequest", "unexpected page token")
 		}
-		mr := multipart.NewReader(r.Body, params["boundary"])
-		meta, err := mr.NextPart()
-		if err != nil {
-			apiError(w, 400, "badRequest", "no metadata part")
-			return
-		}
-		mb, _ := io.ReadAll(meta)
-		f.uploadMeta = string(mb)
-		media, err := mr.NextPart()
-		if err != nil {
-			apiError(w, 400, "badRequest", "no media part")
-			return
-		}
-		f.uploadType = media.Header.Get("Content-Type")
-		f.uploadMedia, _ = io.ReadAll(media)
-		io.WriteString(w, `{"id":"d-2","message":{"id":"m-10","threadId":"t-1"}}`)
 	})
 	mux.HandleFunc("POST /gmail/v1/users/me/drafts", func(w http.ResponseWriter, r *http.Request) {
 		b, _ := io.ReadAll(r.Body)
@@ -167,6 +164,11 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	mux.HandleFunc("GET /gmail/v1/users/me/drafts/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if r.PathValue("id") != "d-1" {
 			apiError(w, 404, "notFound", "Requested entity was not found.")
+			return
+		}
+		if r.URL.Query().Get("format") == "raw" {
+			// base64url of "From: a@x.com\r\n\r\nhi", unpadded.
+			io.WriteString(w, `{"id":"d-1","message":{"id":"m-9","threadId":"t-1","raw":"RnJvbTogYUB4LmNvbQ0KDQpoaQ"}}`)
 			return
 		}
 		io.WriteString(w, `{"id":"d-1","message":{"id":"m-9","threadId":"t-1","payload":{"headers":[{"name":"To","value":"bob@example.com"},{"name":"Cc","value":"carol@example.com"},{"name":"Subject","value":"Draft subject"}]}}}`)
@@ -181,6 +183,43 @@ func newFakeAPI(t *testing.T) *fakeAPI {
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 	return f
+}
+
+// handleUpload answers a media upload, create or update: it applies the
+// failure switches, records the two multipart parts and writes reply.
+func (f *fakeAPI) handleUpload(w http.ResponseWriter, r *http.Request, reply string) {
+	time.Sleep(f.routeDelay)
+	n := f.uploadCalls.Add(1)
+	if n <= f.uploadFailN {
+		apiError(w, 503, "backendError", "Backend Error")
+		return
+	}
+	if f.uploadFailCode != 0 {
+		apiError(w, f.uploadFailCode, "uploadTooLarge", "Request Entity Too Large")
+		return
+	}
+	f.uploadQuery = r.URL.Query().Get("uploadType")
+	_, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || params["boundary"] == "" {
+		apiError(w, 400, "badRequest", "not multipart: "+r.Header.Get("Content-Type"))
+		return
+	}
+	mr := multipart.NewReader(r.Body, params["boundary"])
+	meta, err := mr.NextPart()
+	if err != nil {
+		apiError(w, 400, "badRequest", "no metadata part")
+		return
+	}
+	mb, _ := io.ReadAll(meta)
+	f.uploadMeta = string(mb)
+	media, err := mr.NextPart()
+	if err != nil {
+		apiError(w, 400, "badRequest", "no media part")
+		return
+	}
+	f.uploadType = media.Header.Get("Content-Type")
+	f.uploadMedia, _ = io.ReadAll(media)
+	io.WriteString(w, reply)
 }
 
 func newTestClient(t *testing.T, f *fakeAPI) *Client {
@@ -599,5 +638,75 @@ func TestCreateDraftUploadTooLarge(t *testing.T) {
 	}
 	if f.uploadCalls.Load() != 1 {
 		t.Fatalf("413 must not be retried, calls = %d", f.uploadCalls.Load())
+	}
+}
+
+func TestFindDraftIDWalksThePages(t *testing.T) {
+	f := newFakeAPI(t)
+	c := newTestClient(t, f)
+	id, err := c.FindDraftID(context.Background(), "m-9")
+	if err != nil || id != "d-1" {
+		t.Fatalf("id = %q err %v", id, err)
+	}
+	if f.draftListCalls.Load() != 2 {
+		t.Fatalf("list calls = %d, want 2 (the draft is on the second page)", f.draftListCalls.Load())
+	}
+	_, err = c.FindDraftID(context.Background(), "m-plain")
+	var nf *NotFoundError
+	if !errors.As(err, &nf) || nf.ID != "m-plain" {
+		t.Fatalf("err = %v, want NotFoundError for a message that is not a draft", err)
+	}
+}
+
+func TestGetDraftRaw(t *testing.T) {
+	f := newFakeAPI(t)
+	c := newTestClient(t, f)
+	d, err := c.GetDraftRaw(context.Background(), "d-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.DraftID != "d-1" || d.MessageID != "m-9" || d.ThreadID != "t-1" || string(d.Raw) != "From: a@x.com\r\n\r\nhi" {
+		t.Fatalf("draft = %+v raw %q", d, d.Raw)
+	}
+	_, err = c.GetDraftRaw(context.Background(), "d-missing")
+	var nf *NotFoundError
+	if !errors.As(err, &nf) {
+		t.Fatalf("err = %v, want NotFoundError", err)
+	}
+}
+
+func TestUpdateDraftUpload(t *testing.T) {
+	f := newFakeAPI(t)
+	c := newTestClient(t, f)
+	raw := []byte("From: a@x.com\r\nContent-Type: multipart/mixed; boundary=\"b\"\r\n\r\n--b\r\n\r\nhi\r\n--b--\r\n")
+	d, err := c.UpdateDraftUpload(context.Background(), "d-1", raw, "t-1")
+	if err != nil || d.DraftID != "d-1" || d.MessageID != "m-11" || d.ThreadID != "t-1" {
+		t.Fatalf("draft = %+v err %v", d, err)
+	}
+	if f.updatedID != "d-1" || f.uploadQuery != "multipart" {
+		t.Fatalf("updated = %q uploadType = %q", f.updatedID, f.uploadQuery)
+	}
+	if !strings.Contains(f.uploadMeta, `"threadId":"t-1"`) || strings.Contains(f.uploadMeta, `"raw"`) {
+		t.Fatalf("metadata = %s (thread id required, raw must be absent)", f.uploadMeta)
+	}
+	if f.uploadType != "message/rfc822" || string(f.uploadMedia) != string(raw) {
+		t.Fatalf("media type = %q media = %q, want the raw message", f.uploadType, f.uploadMedia)
+	}
+	_, err = c.UpdateDraftUpload(context.Background(), "d-missing", raw, "")
+	var nf *NotFoundError
+	if !errors.As(err, &nf) {
+		t.Fatalf("err = %v, want NotFoundError", err)
+	}
+}
+
+func TestUpdateDraftUploadTooLarge(t *testing.T) {
+	f := newFakeAPI(t)
+	f.uploadFailCode = 413
+	c := newTestClient(t, f)
+	raw := []byte("From: a@x.com\r\n\r\nhi")
+	_, err := c.UpdateDraftUpload(context.Background(), "d-1", raw, "")
+	var tl *TooLargeError
+	if !errors.As(err, &tl) || tl.Bytes != len(raw) {
+		t.Fatalf("err = %v, want TooLargeError with %d bytes", err, len(raw))
 	}
 }
